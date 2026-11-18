@@ -6,10 +6,10 @@
   <p class="meta">
     <span>{{ authors() }}</span>
     @if (paper().year; as year) {
-      <span class="dot" aria-hidden="true">·</span><span>{{ year }}</span>
+      <span>{{ year }}</span>
     }
     @if (paper().publisher; as publisher) {
-      <span class="dot" aria-hidden="true">·</span><span>{{ publisher }}</span>
+      <span>{{ publisher }}</span>
     }
   </p>
 

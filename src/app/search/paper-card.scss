@@ -21,13 +21,31 @@ a {
   }
 }
 
+// Authors · year · publisher. Every item carries a "·" in its left padding, and
+// the row is shifted left by that padding and clipped there, so the separator
+// only shows between two items on the same line, never at the start of a line.
 .meta {
+  --separator-space: 0.9rem;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.15rem 0.4rem;
-  margin: 0 0 0.6rem;
+  row-gap: 0.15rem;
+  margin: 0 0 0.6rem calc(-1 * var(--separator-space));
+  clip-path: inset(0 0 0 var(--separator-space));
   font-size: 0.85rem;
   color: var(--text-muted);
+
+  > span {
+    position: relative;
+    padding-left: var(--separator-space);
+
+    &::before {
+      content: '·';
+      position: absolute;
+      left: 0;
+      width: var(--separator-space);
+      text-align: center;
+    }
+  }
 }
 
 .abstract {
