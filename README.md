@@ -12,6 +12,8 @@ query.
 Built as a take-home project for Cypris. The reasoning behind each choice, with the
 alternatives considered, is in [Design_Decisions.md](Design_Decisions.md).
 
+![A 15-second demo: a boolean search, clicking the 2021 bar to list that year's papers, then refining the loaded papers in the browser](docs/demo.gif)
+
 ![Search results for a boolean query, with the papers-per-year chart above the paper cards](docs/search-desktop.png)
 
 | Year drill-down                                                                                     | Phone width                                                          |
