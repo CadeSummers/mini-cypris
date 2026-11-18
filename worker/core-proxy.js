@@ -7,6 +7,8 @@
 // It is deliberately not an open proxy: anything other than the search and
 // aggregate endpoints is refused, so the key cannot be used for other calls.
 
+import { DurableObject } from 'cloudflare:workers';
+
 const CORE_ORIGIN = 'https://api.core.ac.uk';
 
 /** The only CORE endpoints the app needs, by method. */
@@ -34,6 +36,18 @@ const BROWSER_CACHE_SECONDS = 300;
  * more slowly than result lists, hence the longer time for aggregates.
  */
 const EDGE_CACHE_SECONDS = { GET: 600, POST: 3600 };
+
+/**
+ * Each visitor may cause this many CORE requests per minute. CORE allows the
+ * shared key about 10 a minute, so without this one busy visitor could lock
+ * everyone else out; 8 leaves a little room. Answers served from the cache
+ * above are free and never counted.
+ */
+const VISITOR_LIMIT = 8;
+const VISITOR_WINDOW_MS = 60_000;
+
+/** Tells the app that this Worker, not CORE, refused the request. */
+const LIMIT_HEADER = 'x-proxy-limit';
 
 /** Says whether the answer came from the Worker's cache; handy when debugging. */
 const CACHE_HEADER = 'x-proxy-cache';
@@ -73,7 +87,67 @@ function forClient(response, method, cacheStatus) {
   return new Response(response.body, { status: response.status, headers });
 }
 
-async function proxyToCore(request, url, apiKey, ctx) {
+/**
+ * Counts one visitor's CORE requests. Cloudflare runs a single instance of
+ * this object per visitor (per IP address), so the count is exact however
+ * many Worker instances are serving requests around the world.
+ *
+ * It is a sliding window: the times of the visitor's recent requests are kept,
+ * and a new one is allowed only if fewer than `limit` fall inside the window.
+ */
+export class VisitorLimiter extends DurableObject {
+  /** Returns whether one more request is allowed and, if not, when to retry. */
+  async take(limit, windowMs) {
+    const now = Date.now();
+    const stored = (await this.ctx.storage.get('times')) ?? [];
+    const recent = stored.filter((time) => now - time < windowMs);
+
+    if (recent.length >= limit) {
+      // The oldest request in the window is the next one to expire.
+      return { allowed: false, retryAt: recent[0] + windowMs };
+    }
+
+    recent.push(now);
+    await this.ctx.storage.put('times', recent);
+    return { allowed: true, retryAt: null };
+  }
+}
+
+/** Asks the visitor's limiter for permission to make one CORE request. */
+async function takeVisitorSlot(request, env) {
+  const allowed = { allowed: true, retryAt: null };
+  // The binding is absent in some local setups; the proxy still works without it.
+  if (!env.VISITOR_LIMITER) return allowed;
+
+  // Set by Cloudflare itself, so a visitor cannot spoof it to dodge the limit.
+  const visitor = request.headers.get('cf-connecting-ip') ?? 'unknown';
+  try {
+    const limiter = env.VISITOR_LIMITER.get(env.VISITOR_LIMITER.idFromName(visitor));
+    return await limiter.take(VISITOR_LIMIT, VISITOR_WINDOW_MS);
+  } catch {
+    // If the limiter itself fails, serving the search matters more than counting it.
+    return allowed;
+  }
+}
+
+function visitorLimitResponse(retryAt) {
+  const seconds = Math.max(1, Math.ceil((retryAt - Date.now()) / 1000));
+  return new Response(
+    JSON.stringify({ message: 'Too many new searches from this visitor; try again shortly.' }),
+    {
+      status: 429,
+      headers: {
+        'content-type': 'application/json',
+        [LIMIT_HEADER]: 'visitor',
+        'retry-after': String(seconds),
+        // Same header CORE uses, so the app's "try again at" message works unchanged.
+        'x-ratelimit-retry-after': new Date(retryAt).toISOString(),
+      },
+    },
+  );
+}
+
+async function proxyToCore(request, url, env, ctx) {
   const method = request.method;
   const path = url.pathname.replace(/^\/core-api/, '');
   if (!ALLOWED[method]?.includes(path)) {
@@ -86,6 +160,11 @@ async function proxyToCore(request, url, apiKey, ctx) {
   const cached = await cache.match(cacheKey);
   if (cached) return forClient(cached, method, 'HIT');
 
+  // Only requests that will actually reach CORE count against the visitor.
+  const slot = await takeVisitorSlot(request, env);
+  if (!slot.allowed) return visitorLimitResponse(slot.retryAt);
+
+  const apiKey = (env.CORE_API_KEY ?? '').trim();
   const headers = { accept: 'application/json' };
   if (apiKey) headers.authorization = `Bearer ${apiKey}`;
   if (body !== undefined) headers['content-type'] = 'application/json';
@@ -130,7 +209,7 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname.startsWith('/core-api/')) {
-      return proxyToCore(request, url, (env.CORE_API_KEY ?? '').trim(), ctx);
+      return proxyToCore(request, url, env, ctx);
     }
     // Everything else is the Angular app; wrangler.jsonc normally serves it
     // without invoking this Worker at all.

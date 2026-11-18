@@ -31,6 +31,18 @@ export function toApiError(error: unknown): ApiError {
   const { status } = error;
 
   if (status === 429) {
+    // The deployed proxy caps each visitor separately from CORE's own limit.
+    if (error.headers.get('x-proxy-limit') === 'visitor') {
+      return {
+        kind: 'rate-limit',
+        title: 'Search limit reached',
+        detail:
+          'This demo shares one CORE allowance among all visitors, so each visitor gets a ' +
+          'limited number of new searches per minute. Searches you have already run are ' +
+          'remembered and do not count.',
+        retryAt: parseRetryAfter(error.headers.get('x-ratelimit-retry-after')),
+      };
+    }
     return {
       kind: 'rate-limit',
       title: 'CORE rate limit reached',

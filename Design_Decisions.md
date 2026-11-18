@@ -148,11 +148,10 @@ above (both commits are in the history). The move changed about ten lines, which
 benefit of keeping the proxy to web-standard APIs.
 
 **Trade-off, stated plainly.** The deployed site shares one key, and so one rate limit, among
-everyone using it. The edge cache softens this for repeated queries, but a burst of distinct
-new queries can still hit the limit, and cached results can be up to ten minutes old. That is
-fine for a demo; a product would also rate-limit per user. The dev proxy and the Worker also duplicate a little logic
-(adding the header); I kept them separate because each is under a screen of code and they run
-in different runtimes.
+everyone using it. The edge cache and the per-visitor limit (section 4a) soften this, but
+cached results can be up to ten minutes old. The dev proxy and the Worker also duplicate a
+little logic (adding the header); I kept them separate because each is small and they run in
+different runtimes.
 
 **Alternatives.**
 
@@ -165,6 +164,72 @@ in different runtimes.
 - _Cloudflare Pages Functions_: also works, but Cloudflare now points new projects to Workers
   with static assets, which is what this uses.
 - _GitHub Pages_: free and simple, but static only, so the key problem would be unsolved.
+
+### 4a. Per-visitor rate limiting
+
+_Brief step 2 (use the API responsibly), step 8 (additions)._
+
+**Decision.** Each visitor to the deployed site may cause at most 8 requests to CORE per
+minute. The count is kept by a Durable Object, one per visitor IP address
+(`VisitorLimiter` in `worker/core-proxy.js`). Searches answered from the Worker's cache are
+free and never counted. When the limit is reached the Worker answers 429 itself, with the
+exact time the visitor can search again, and the app shows a message that says this is the
+demo's limit, not CORE's.
+
+**Why.**
+
+- **One shared key means one shared allowance.** CORE gives the key about 10 requests a
+  minute in total. Without a per-visitor cap, one person (or one script) clicking quickly
+  would lock every other visitor out, including a reviewer.
+- **8 of 10.** A fresh search costs two requests (results and chart counts), so 8 allows four
+  brand-new searches a minute, more than a person reading results will make, while leaving a
+  little for someone else. It is a constant at the top of the Worker.
+- **Only real CORE requests count.** The limiter is checked after the cache, so repeating a
+  search, using a shared link, or going back never spends the visitor's allowance.
+- **A sliding window, not a fixed one.** The object stores the times of the visitor's recent
+  requests and allows a new one only if fewer than 8 fall in the last 60 seconds. That makes
+  the "try again at" time exact: it is when the oldest of those requests turns 60 seconds old.
+- **It fails open.** If the limiter is unavailable, the search goes ahead. The limiter
+  protects the demo; it should never be the reason the demo is down.
+- **The visitor is identified by `CF-Connecting-IP`,** which Cloudflare sets itself and a
+  client cannot forge, unlike `X-Forwarded-For`.
+- **The app tells the two limits apart.** The Worker's 429 carries an `x-proxy-limit` header,
+  and `toApiError` uses it to show "Search limit reached" with the reason, not the CORE
+  message suggesting an API key (which a visitor to the demo cannot act on).
+
+**What I tried first, and why I changed it.** Cloudflare has a built-in rate-limiting binding
+that needs a few lines of configuration, and I started with it. Testing it on the deployed
+Worker with the limit set to 8, 19 requests in about a minute all passed. That is by design:
+Cloudflare documents it as approximate and eventually consistent, counted separately in each
+location, and recommends a Durable Object when the limit must be strict. It suits "about a
+thousand a minute"; it does not suit "exactly 8". With the Durable Object, the same test
+passed 8 requests and refused the 9th, and a search already in the cache was still served.
+
+**Trade-offs, stated plainly.**
+
+- **An IP address is not a person.** People behind one office or university network share a
+  limit, and one person can change networks. Without accounts there is nothing better to key
+  on, and for a demo the cost of being wrong is a short wait.
+- **A request that CORE itself refuses still uses one of the visitor's 8.** Counting only
+  successes would need a second call to the object; the simpler rule errs on the side of
+  protecting the shared allowance.
+- **It limits each visitor, not the total.** Two visitors each within their limit can still
+  exhaust CORE's 10 a minute between them; then CORE's own 429 is passed through as before.
+- **Each counted request adds a Durable Object call** (a few milliseconds) and a small write.
+  This is well inside Cloudflare's free allowance at demo traffic.
+
+**Alternatives.**
+
+- _Cloudflare's rate-limiting binding_: tried and measured, as above.
+- _A counter in Workers KV_: also eventually consistent, with no atomic increment.
+- _A counter in the Cache API_: per data centre and not atomic; two simultaneous requests
+  would both read the old count.
+- _Cloudflare WAF rate-limiting rules_: no code at all, but configured in the dashboard
+  rather than in the repository, and cannot tell a cache hit from a request that reaches
+  CORE.
+- _A single global limiter_ (one object for everyone): would protect CORE's total exactly but
+  does nothing for fairness between visitors, and puts every request through one object.
+- _Limiting in the Angular app_: trivially bypassed, since anyone can call the Worker directly.
 
 ---
 
@@ -499,8 +564,8 @@ error mapping and URL parsing. Prettier for formatting. Every commit builds and 
 
 ## What I would do next
 
-1. Per-user rate limiting in the Worker, so one busy visitor cannot use up the shared CORE
-   allowance.
+1. A global budget in the Worker on top of the per-visitor limit, so the app can queue or
+   warn before CORE's own limit is hit.
 2. Drill-down from the document type chart, the one extra dimension where CORE's filter
    matched the charted count exactly.
 3. Saved searches and export of results (CSV / BibTeX).

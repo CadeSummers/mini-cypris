@@ -36,6 +36,21 @@ describe('toApiError', () => {
     expect(error.retryAt?.toISOString()).toBe('2026-11-18T17:17:00.000Z');
   });
 
+  it("tells the proxy's per-visitor limit apart from CORE's own", () => {
+    const fromCore = toApiError(http(429));
+    const fromProxy = toApiError(
+      http(429, {
+        'x-proxy-limit': 'visitor',
+        'x-ratelimit-retry-after': '2026-11-18T17:17:00.000Z',
+      }),
+    );
+
+    expect(fromCore.title).toBe('CORE rate limit reached');
+    expect(fromProxy.kind).toBe('rate-limit');
+    expect(fromProxy.title).toBe('Search limit reached');
+    expect(fromProxy.retryAt?.toISOString()).toBe('2026-11-18T17:17:00.000Z');
+  });
+
   it('handles non-HTTP failures', () => {
     expect(toApiError(new Error('boom')).kind).toBe('unknown');
   });

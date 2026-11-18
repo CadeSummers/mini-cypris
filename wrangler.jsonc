@@ -5,6 +5,12 @@
   "name": "mini-cypris",
   "main": "worker/core-proxy.js",
   "compatibility_date": "2026-06-01",
+  // Per-visitor cap on requests that reach CORE: one small Durable Object per
+  // visitor keeps an exact count (see VisitorLimiter in worker/core-proxy.js).
+  "durable_objects": {
+    "bindings": [{ "name": "VISITOR_LIMITER", "class_name": "VisitorLimiter" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["VisitorLimiter"] }],
   "assets": {
     "directory": "dist/mini-cypris/browser",
     "binding": "ASSETS",

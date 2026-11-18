@@ -121,7 +121,9 @@ Mapped to the steps in the project brief:
 12. **Deployable without leaking the key.** A small Cloudflare Worker stands in for the dev
     proxy, holds the key as an encrypted secret, and is restricted to the two CORE endpoints
     the app needs. It caches successful
-    answers at the edge so repeated queries do not spend the shared rate limit.
+    answers at the edge so repeated queries do not spend the shared rate limit. A per-visitor limit (8 new
+    CORE requests a minute, counted exactly by a Durable Object) stops one visitor using up
+    the allowance everyone shares.
 13. **Chart dimension switcher.** "Chart by" Year, Document type, Publisher or Author. All
     four come from one CORE request, so switching is instant and costs nothing against the
     rate limit. Placeholder values are dropped; names CORE spells two ways are left apart and
@@ -148,8 +150,9 @@ wrangler.jsonc  Cloudflare build output and routing settings
 ## Known limitations
 
 - A deployed copy shares one CORE key, and therefore one rate limit, among all its visitors.
-  The Worker caches repeated queries (searches for 10 minutes, year counts for an hour) but
-  does no per-user limiting, so a burst of new queries can still be rate-limited.
+  The Worker caches repeated queries (searches for 10 minutes, year counts for an hour) and
+  limits each visitor to 8 new CORE requests a minute, but several visitors searching at
+  once can still reach CORE's own limit.
 - The in-browser refine filter matches by substring and only sees the loaded papers; it is a
   convenience on top of CORE's search, not a replacement for it.
 - CORE pages by offset only up to 10,000 results; "Load more" stops there.
