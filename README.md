@@ -41,22 +41,8 @@ requests on the server side, so it never reaches the browser bundle.
 | `npm test -- --watch=false` | Runs the unit tests once                   |
 | `npm run build`             | Production build into `dist/`              |
 
-`npm start` is the way to run the app locally: API calls go through the dev-server proxy, so
-opening a static copy of `dist/` directly will not reach CORE.
-
-### Deploying (Netlify)
-
-The repository is ready to deploy to [Netlify](https://www.netlify.com/): `netlify.toml`
-builds the app, and `netlify/functions/core-proxy.mjs` plays the role of the dev proxy,
-serving `/core-api/*` and adding the key on the server.
-
-1. In Netlify, choose **Add new site → Import an existing project** and pick this repository.
-   The build settings are read from `netlify.toml`.
-2. Under **Site configuration → Environment variables**, add `CORE_API_KEY` with your key.
-3. Deploy. Later pushes to `main` redeploy automatically.
-
-The function forwards only the two CORE endpoints the app uses, so the public URL cannot be
-used as a general-purpose proxy for the key (see
+`npm start` is the supported way to run the app: API calls go through the dev-server proxy,
+so a static copy of `dist/` would need an equivalent proxy in front of it (see
 [Design_Decisions.md](Design_Decisions.md#4-api-key-and-the-dev-proxy)).
 
 ## What it does
@@ -102,9 +88,7 @@ Mapped to the steps in the project brief:
     messages for rate limiting, bad queries, a rejected key, server errors and being offline.
 11. **Accessibility.** Labelled controls, live regions for status changes, a text summary and
     table alternative for the chart, keyboard-reachable year selection, reduced-motion support.
-12. **Deployable without leaking the key.** A small serverless function stands in for the dev
-    proxy on Netlify, restricted to the two CORE endpoints the app needs.
-13. **Tests.** 83 unit tests covering the API service, data cleaning, the boolean parser and
+12. **Tests.** 83 unit tests covering the API service, data cleaning, the boolean parser and
     matcher, the search store (cancellation, caching, paging, fallback) and URL handling.
 
 ## Project layout
@@ -115,14 +99,12 @@ src/app/
   search/       search page, search bar, paper card, search store, boolean parser and matcher
   chart/        year chart component and the pure functions that build its data
 proxy.conf.mjs  dev-server proxy that adds the API key
-netlify/        the same proxy as a serverless function, for the deployed site
-netlify.toml    Netlify build and routing settings
 ```
 
 ## Known limitations
 
-- A deployed copy shares one CORE key, and therefore one rate limit, among all its visitors.
-  The proxy function does no per-user limiting.
+- There is no production hosting story: the key lives in the dev proxy, so deploying would
+  need a small backend to play the same role.
 - The in-browser refine filter matches by substring and only sees the loaded papers; it is a
   convenience on top of CORE's search, not a replacement for it.
 - CORE pages by offset only up to 10,000 results; "Load more" stops there.

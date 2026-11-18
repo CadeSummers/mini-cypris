@@ -111,35 +111,18 @@ key at all.
 - It avoids depending on CORE's CORS behaviour for the `POST` aggregate request.
 - A reviewer can clone and run without requesting a key.
 
-**Deployment.** A static build has no dev server, so the deployed site needs something doing
-the proxy's job. `netlify/functions/core-proxy.mjs` is that: one serverless function, mounted
-at the same `/core-api/*` path, that adds the key from the site's environment variables. The
-Angular code is identical in development and production; nothing in `src/` knows which proxy
-it is talking to.
-
-- The function is an allowlist, not an open proxy: only `GET /v3/search/works/` and
-  `POST /v3/search/works/aggregate` are forwarded. A public URL that forwarded anything would
-  let strangers spend the key on any CORE endpoint.
-- It passes CORE's rate-limit headers through, so the "try again at" message works when
-  deployed, and marks successful searches cacheable for five minutes to save requests.
-- It has no dependencies and uses only web-standard `Request`/`Response`/`fetch`, so moving
-  it to another host is a small change.
-
-**Trade-off, stated plainly.** The deployed site shares one key, and so one rate limit, among
-everyone using it. That is fine for a demo and wrong for a product, where the backend would
-cache and rate-limit per user. The dev proxy and the function also duplicate a little logic
-(reading the key, adding the header); I kept them separate because each is under a screen of
-code and they run in different runtimes.
+**Trade-off, stated plainly.** There is no production deployment: a static build of this app
+needs a small backend doing what the dev proxy does. `CoreApi` takes its base URL from an
+injection token (`CORE_API_BASE_URL`) so that pointing it at such a backend is a one-line
+change.
 
 **Alternatives.**
 
 - _Key in `environment.ts`_ (the starter's approach): simplest, but leaks the key.
 - _Key typed into the UI and kept in `localStorage`_: works on static hosting, but adds a
   setup step for every user and stores a secret in the browser.
-- _An Express server_: works, but needs an always-on host for what is one small function.
-- _Vercel or Cloudflare Pages functions_: equivalent; Netlify needed the least configuration
-  for a static Angular build plus one function.
-- _GitHub Pages_: free and simple, but static only, so the key problem would be unsolved.
+- _A small Express/serverless backend_: the right answer for production; out of scope for a
+  front-end exercise.
 
 ---
 
@@ -368,8 +351,8 @@ error mapping and URL parsing. Prettier for formatting. Every commit builds and 
 
 ## What I would do next
 
-1. Server-side caching and per-user rate limiting in the proxy function, so one busy visitor
-   cannot use up the shared CORE allowance.
+1. A tiny backend (or serverless function) to replace the dev proxy, so the app can be
+   deployed.
 2. More chart dimensions (top authors, document type) using the same aggregate endpoint.
 3. Highlight matched terms in titles and abstracts.
 4. Saved searches and export of results (CSV / BibTeX).
