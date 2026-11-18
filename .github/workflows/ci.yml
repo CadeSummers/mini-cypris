@@ -31,6 +31,8 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run e2e
+      # The production build and the Worker together under wrangler dev, with a fake CORE.
+      - run: npm run e2e:worker
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

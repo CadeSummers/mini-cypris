@@ -47,15 +47,16 @@ requests on the server side, so it never reaches the browser bundle.
 
 ### Other commands
 
-| Command                     | What it does                                                     |
-| --------------------------- | ---------------------------------------------------------------- |
-| `npm test`                  | Runs the unit tests (Vitest) in watch mode                       |
-| `npm test -- --watch=false` | Runs the unit tests once                                         |
-| `npm run e2e`               | Runs the end-to-end tests (Playwright) against a mocked CORE     |
-| `npm run test:worker`       | Runs the Cloudflare Worker's tests in a local Workers runtime    |
-| `npm run build`             | Production build into `dist/`                                    |
-| `npm run preview`           | Builds, then serves the app and the Worker locally with Wrangler |
-| `npm run deploy`            | Builds, then deploys to Cloudflare                               |
+| Command                     | What it does                                                      |
+| --------------------------- | ----------------------------------------------------------------- |
+| `npm test`                  | Runs the unit tests (Vitest) in watch mode                        |
+| `npm test -- --watch=false` | Runs the unit tests once                                          |
+| `npm run e2e`               | Runs the end-to-end tests (Playwright) against a mocked CORE      |
+| `npm run test:worker`       | Runs the Cloudflare Worker's tests in a local Workers runtime     |
+| `npm run e2e:worker`        | Builds, then tests the app and the Worker together under Wrangler |
+| `npm run build`             | Production build into `dist/`                                     |
+| `npm run preview`           | Builds, then serves the app and the Worker locally with Wrangler  |
+| `npm run deploy`            | Builds, then deploys to Cloudflare                                |
 
 The end-to-end tests need a browser the first time: `npx playwright install chromium`. They
 start the dev server themselves and need no API key, because every CORE request is mocked.
@@ -147,6 +148,10 @@ Mapped to the steps in the project brief:
     against a fake CORE. They check that the key is sent to CORE and never to the browser,
     that only the two allowed endpoints are proxied, that repeated queries come from the
     cache, and that a visitor's 9th new request in a minute is refused.
+18. **Routing tests.** 6 browser tests run the production build and the Worker together under
+    `wrangler dev`, using the real `wrangler.jsonc`. They check which requests reach the
+    Worker and which are served as files, and that the per-visitor limit message appears in
+    the page.
 
 ## Project layout
 
@@ -159,6 +164,7 @@ proxy.conf.mjs  dev-server proxy that adds the API key
 worker/         the same proxy as a Cloudflare Worker, for the deployed site, and its tests
 wrangler.jsonc  Cloudflare build output and routing settings
 e2e/            Playwright end-to-end tests and the mocked CORE they run against
+e2e-worker/     browser tests of the built app and the Worker together, and their fake CORE
 ```
 
 ## Known limitations
@@ -175,9 +181,9 @@ e2e/            Playwright end-to-end tests and the mocked CORE they run against
 - The end-to-end tests use a mocked CORE, so they would not notice CORE changing its
   response format. Clicking a bar on the chart canvas is checked by hand; the tests use the
   chart's table view for the same action.
-- The Worker's tests run in a local copy of Cloudflare's runtime. The routing between the
-  app's files and the Worker, and the 60-second limit window actually expiring, are checked
-  on the deployed site only.
+- The Worker's tests run in a local copy of Cloudflare's runtime. Cloudflare's real network,
+  the deployed secret and the 60-second limit window actually expiring are checked on the
+  deployed site only.
 
 ## A note on AI assistance
 

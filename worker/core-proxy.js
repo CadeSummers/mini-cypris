@@ -11,6 +11,15 @@ import { DurableObject } from 'cloudflare:workers';
 
 const CORE_ORIGIN = 'https://api.core.ac.uk';
 
+/**
+ * Where CORE requests go. Always the real API unless the CORE_API_ORIGIN
+ * variable is set, which only the routing tests do (to point at a fake CORE).
+ * It is not in wrangler.jsonc, so the deployed Worker never has it.
+ */
+function coreOrigin(env) {
+  return (env.CORE_API_ORIGIN ?? '').trim() || CORE_ORIGIN;
+}
+
 /** The only CORE endpoints the app needs, by method. */
 const ALLOWED = {
   GET: ['/v3/search/works/'],
@@ -171,7 +180,7 @@ async function proxyToCore(request, url, env, ctx) {
 
   let upstream;
   try {
-    upstream = await fetch(`${CORE_ORIGIN}${path}${url.search}`, { method, headers, body });
+    upstream = await fetch(`${coreOrigin(env)}${path}${url.search}`, { method, headers, body });
   } catch {
     return json(502, 'Could not reach the CORE API.');
   }

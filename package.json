@@ -8,6 +8,7 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "e2e": "playwright test",
+    "e2e:worker": "playwright test --config playwright.worker.config.ts",
     "test:worker": "node --test \"worker/*.test.mjs\"",
     "deploy": "npm run build && wrangler deploy",
     "preview": "npm run build && wrangler dev"

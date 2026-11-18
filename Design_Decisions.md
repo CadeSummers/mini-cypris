@@ -269,9 +269,8 @@ visitor` and a retry time one minute after the first; CORE saw exactly 8 request
 - **The real runtime, not a stand-in.** The Worker uses the Cache API, a Durable Object and
   `crypto.subtle`. Mocking those in Node would test my mocks. Miniflare runs `workerd`, the
   same runtime Cloudflare runs in production.
-- **No production code was changed to make it testable.** Miniflare can intercept the
-  Worker's outbound `fetch`, so the fake CORE is supplied by the test, not by a setting in
-  the Worker.
+- **These tests needed no change to the Worker.** Miniflare can intercept the Worker's
+  outbound `fetch`, so the fake CORE is supplied by the test.
 - **Each test is its own visitor** (its own IP address and query text), so tests cannot use
   up each other's allowance or read each other's cache entries.
 
@@ -283,9 +282,9 @@ tests fail; I reverted it.
 - **The window expiring after 60 seconds is not tested.** I cannot move the runtime's clock,
   and really waiting would add a minute to every CI run. The test checks the retry time the
   Worker returns instead.
-- **It is Cloudflare's runtime, but not Cloudflare's network.** The routing in
-  `wrangler.jsonc` (which paths reach the Worker), the real edge cache across locations and
-  the deployed secret are still only checked on the live site.
+- **It is Cloudflare's runtime, but not Cloudflare's network.** These tests call the Worker
+  directly, so the routing in `wrangler.jsonc` is covered separately (section 4c). The real
+  edge cache across locations and the deployed secret are only checked on the live site.
 - **Miniflare is pinned as its own dev dependency (version 4).** The copy bundled inside
   Wrangler was a version 5 beta whose options differ from the published documentation, so I
   did not build on it. The cost is a second copy in `node_modules`.
@@ -300,6 +299,63 @@ tests fail; I reverted it.
   version, and Angular's test builder already chooses one.
 - _Unit-testing the helper functions in Node_: fast, but it skips the parts most likely to be
   wrong (cache keys, the Durable Object, header handling on real `Response` objects).
+
+### 4c. Testing the app and the Worker together
+
+_Brief step 7 ("working" at each stage), step 8 (additions)._
+
+**Decision.** 6 Playwright tests in `e2e-worker/` run against the production build and the
+Worker together, started by `wrangler dev` from the real `wrangler.jsonc`. The Worker talks
+to a small fake CORE (`e2e-worker/fake-core.ts`). Run them with `npm run e2e:worker`; CI
+runs them after the other browser tests.
+
+**What they prove that nothing else does.**
+
+- **The routing in `wrangler.jsonc`.** `/core-api/...` always reaches the Worker, even for a
+  path the Worker refuses (it answers 404 as JSON, not the app's `index.html`). Everything
+  else is served as a file, with the right content type and without passing through the
+  proxy. An unknown page address still loads the app.
+- **The whole chain in one go.** A search typed in the browser goes through the built app,
+  the Worker and (fake) CORE; the response carries the Worker's cache header, and the fake
+  CORE confirms the key arrived.
+- **A shared link opens directly** from the production build.
+- **The limit, as a visitor sees it.** The fifth new search inside a minute shows "Search
+  limit reached" in the page, and the fake CORE received exactly 8 requests.
+
+**Why.** The other two suites each stop at a seam. The browser tests (11a) run against the
+dev server with CORE mocked in the browser, so the Worker is never involved. The Worker
+tests (4b) call the Worker directly, so the app and the routing rules are never involved.
+A wrong pattern in `run_worker_first` would pass both and break the deployed site. I
+confirmed this: changing the pattern to `/api/*` left every other suite green and failed
+four of these six tests.
+
+**The one change to production code.** The Worker reads an optional `CORE_API_ORIGIN`
+variable and otherwise uses the real CORE address. `wrangler dev` has no way to intercept a
+Worker's outbound requests from outside, so the test has to tell the Worker where the fake
+CORE is. The variable is not in `wrangler.jsonc`, so the deployed Worker never has it, and
+the Worker tests (4b) still assert that the default is `https://api.core.ac.uk`.
+
+**Trade-offs, stated plainly.**
+
+- **That variable is a new way to misconfigure the Worker.** Anyone who can set it can send
+  the key to another server. But only someone with access to the Cloudflare account can set
+  it, and that person can already read the secret.
+- **The tests share one visitor allowance,** so they run one at a time, in order, with the
+  limit test last. Each run uses a new, empty state folder so earlier runs cannot affect it.
+- **Slower than the other suites:** it builds the app and starts two processes (about 12
+  seconds locally after the build).
+- **Still a local runtime.** Cloudflare's real network, the real secret and the real CORE
+  are only exercised by the deployed site.
+
+**Alternatives.**
+
+- _Miniflare with an assets setting_, as in 4b: no change to the Worker, but the routing
+  rules would be retyped in the test, so the test would not check the real file.
+- _Running the full browser suite (11a) against the Worker too_: most of those tests need
+  CORE to fail on demand or need more than 8 requests a minute, which is what the Worker
+  exists to prevent.
+- _Testing against the deployed site_: the truest check, but it spends the real allowance
+  and would fail when CORE is slow.
 
 ## 5. Presenting papers
 
@@ -698,6 +754,6 @@ level-one heading, because "Mini-Cypris" in the header was a plain `<span>`. It 
 2. Drill-down from the document type chart, the one extra dimension where CORE's filter
    matched the charted count exactly.
 3. Saved searches and export of results (CSV / BibTeX).
-4. One test that runs the browser suite against the Worker and the built app together, so the
-   routing in `wrangler.jsonc` is covered too.
+4. A scheduled check of the deployed site (one real search a day), to notice if CORE changes
+   its response format.
 5. Dark theme: colours are already CSS custom properties, so this is mostly a second palette.
