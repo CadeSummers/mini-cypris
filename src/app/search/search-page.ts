@@ -1,10 +1,8 @@
 import { DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { PaperCard } from './paper-card';
-import { SearchBar } from './search-bar';
-import { SearchStore } from './search-store';
-
-const DEFAULT_LIMIT = 10;
+import { DEFAULT_LIMIT, SearchBar } from './search-bar';
+import { SearchRequest, SearchStore } from './search-store';
 
 @Component({
   selector: 'app-search-page',
@@ -16,8 +14,9 @@ const DEFAULT_LIMIT = 10;
 })
 export class SearchPage {
   protected readonly store = inject(SearchStore);
+  protected readonly defaultLimit = DEFAULT_LIMIT;
 
-  protected onSearch(query: string): void {
-    this.store.search(query, DEFAULT_LIMIT);
+  protected onSearch(request: SearchRequest): void {
+    this.store.search(request.query, request.limit);
   }
 }

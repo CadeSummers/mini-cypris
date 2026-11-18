@@ -15,6 +15,22 @@
     />
   </div>
 
+  <div class="field limit-field">
+    <label for="limit">Papers to fetch</label>
+    <input
+      id="limit"
+      type="number"
+      inputmode="numeric"
+      min="1"
+      [max]="maxLimit"
+      step="1"
+      [value]="limitDraft()"
+      aria-describedby="limit-help"
+      (change)="onLimitChange($event)"
+    />
+    <span id="limit-help" class="visually-hidden">Between 1 and {{ maxLimit }} papers</span>
+  </div>
+
   <button type="submit" class="primary" [disabled]="busy() || !draft().trim()">
     {{ busy() ? 'Searching…' : 'Search' }}
   </button>

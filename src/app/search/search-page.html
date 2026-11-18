@@ -1,6 +1,7 @@
 <section class="search" aria-label="Search">
   <app-search-bar
     [query]="store.request()?.query ?? ''"
+    [limit]="store.request()?.limit ?? defaultLimit"
     [busy]="store.loading()"
     (search)="onSearch($event)"
   />
