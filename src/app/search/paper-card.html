@@ -1,6 +1,15 @@
 <article class="card">
   <h3 class="title">
-    <a [href]="paper().url" target="_blank" rel="noopener noreferrer">{{ paper().title }}</a>
+    <a [href]="paper().url" target="_blank" rel="noopener noreferrer">
+      <!-- Every segment is an element, so no stray whitespace appears between them. -->
+      @for (segment of titleSegments(); track $index) {
+        @if (segment.match) {
+          <mark>{{ segment.text }}</mark>
+        } @else {
+          <span>{{ segment.text }}</span>
+        }
+      }
+    </a>
   </h3>
 
   <p class="meta">
@@ -14,7 +23,15 @@
   </p>
 
   @if (paper().abstract) {
-    <p class="abstract" [class.clamped]="isLong() && !expanded()">{{ paper().abstract }}</p>
+    <p class="abstract" [class.clamped]="isLong() && !expanded()">
+      @for (segment of abstractSegments(); track $index) {
+        @if (segment.match) {
+          <mark>{{ segment.text }}</mark>
+        } @else {
+          <span>{{ segment.text }}</span>
+        }
+      }
+    </p>
     @if (isLong()) {
       <button
         type="button"

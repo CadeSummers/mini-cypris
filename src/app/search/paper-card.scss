@@ -100,3 +100,11 @@ a {
   color: var(--text-muted);
   text-transform: capitalize;
 }
+
+// Query words found in the title or abstract.
+mark {
+  padding: 0 0.1em;
+  border-radius: 3px;
+  background: var(--highlight-bg);
+  color: inherit;
+}

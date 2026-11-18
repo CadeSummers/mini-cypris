@@ -111,7 +111,7 @@
         @if (visiblePapers().length) {
           <ul class="paper-list">
             @for (paper of visiblePapers(); track paper.id) {
-              <li><app-paper-card [paper]="paper" /></li>
+              <li><app-paper-card [paper]="paper" [highlight]="highlight()" /></li>
             }
           </ul>
 

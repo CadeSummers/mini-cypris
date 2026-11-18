@@ -195,6 +195,54 @@ PDF/DOI links. Styling is hand-written SCSS on a small set of CSS custom propert
 - _Tailwind_: quick to write; adds tooling and moves styling into templates.
 - _A table_: denser, but abstracts do not fit well in table cells.
 
+### 5a. Highlighting matched terms
+
+_Brief step 3 ("clean and intuitive"), step 5 (boolean search), step 8 (additions)._
+
+**Decision.** Words from the query are highlighted in each card's title and abstract, for
+both the CORE search and the in-browser refine box.
+
+**Why.**
+
+- **It answers "why is this paper here?"** A boolean query can match a paper through any of
+  several terms; marking them lets a researcher judge relevance without reading every
+  abstract. It is the standard behaviour of search tools, so its absence is noticed.
+- **It reuses the boolean parser.** The terms come from the same syntax tree that validation
+  and the refine filter use (`collectHighlightTerms` in `search/highlight.ts`), so the
+  highlighter understands the query the same way the rest of the app does:
+  - terms under `NOT` are not highlighted, because they say what a paper must not contain;
+  - `title:x` highlights titles only and `abstract:x` abstracts only;
+  - terms on other fields (author, publisher, year) and comparisons like `year>=2020` are
+    skipped, because the title and abstract are not where they matched.
+- **No HTML is ever built from paper text.** The text is split into plain and matching
+  segments and the template renders each as an element (`<mark>` or `<span>`). The obvious
+  shortcut, building an HTML string and binding it with `innerHTML`, would mean trusting
+  titles and abstracts from thousands of repositories, some of which already contain markup.
+- **A term matches at the start of a word and the whole word is marked,** so `drone` marks
+  "drones" but not "androne". CORE's search stems words in a similar way, so this is close
+  to what CORE actually matched.
+- **`<mark>` is the semantic element** for this, and the colour is a soft background that
+  keeps the text's own colour, so highlighted link text still reads as a link.
+
+**Trade-offs, stated plainly.**
+
+- **It is an approximation of CORE's matching.** CORE also searches the full text and applies
+  its own stemming, so a paper can match with nothing highlighted (the term is in the body)
+  or through a form my rule does not mark ("delivered" for `delivery`).
+- **The refine box matches substrings, the highlighter matches word starts.** Refining by
+  `liver` keeps a paper containing "delivery" but does not highlight it. I chose one
+  highlighting rule for both sources over two slightly different ones.
+
+**Alternatives.**
+
+- _`innerHTML` with a sanitiser_: less template code, but puts untrusted text through an HTML
+  parser for no benefit.
+- _A pipe returning marked-up HTML_: same concern, and pipes that return HTML need
+  `bypassSecurityTrust…`, which is exactly the kind of escape hatch to avoid.
+- _The CSS Custom Highlight API_: highlights without changing the DOM, but needs imperative
+  range bookkeeping and is awkward to test.
+- _Asking CORE for highlights_: its search API does not return match positions.
+
 ---
 
 ## 6. The "how many papers" field
@@ -455,7 +503,6 @@ error mapping and URL parsing. Prettier for formatting. Every commit builds and 
    allowance.
 2. Drill-down from the document type chart, the one extra dimension where CORE's filter
    matched the charted count exactly.
-3. Highlight matched terms in titles and abstracts.
-4. Saved searches and export of results (CSV / BibTeX).
-5. End-to-end tests against a mocked CORE.
-6. Dark theme: colours are already CSS custom properties, so this is mostly a second palette.
+3. Saved searches and export of results (CSV / BibTeX).
+4. End-to-end tests against a mocked CORE.
+5. Dark theme: colours are already CSS custom properties, so this is mostly a second palette.

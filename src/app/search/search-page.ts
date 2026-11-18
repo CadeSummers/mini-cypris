@@ -5,6 +5,7 @@ import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import { ChartPanel } from '../chart/chart-panel';
 import { parseQuery } from './boolean-query';
 import { PaperCard } from './paper-card';
+import { collectHighlightTerms } from './highlight';
 import { filterPapers } from './paper-matcher';
 import { DEFAULT_LIMIT, SearchBar, clampLimit } from './search-bar';
 import { SearchRequest, SearchStore } from './search-store';
@@ -72,6 +73,14 @@ export class SearchPage {
   protected readonly refining = computed(() => this.refine()?.ok === true);
 
   /** While the filter is incomplete or invalid, keep showing everything. */
+  /** Words to mark on the cards: from the CORE query and, if valid, the refine box. */
+  protected readonly highlight = computed(() => {
+    const query = this.store.request()?.query;
+    const search = query ? parseQuery(query) : null;
+    const refine = this.refine();
+    return collectHighlightTerms(search?.ok ? search.ast : null, refine?.ok ? refine.ast : null);
+  });
+
   protected readonly visiblePapers = computed(() => {
     const refine = this.refine();
     const papers = this.store.papers();

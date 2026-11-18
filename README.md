@@ -126,7 +126,10 @@ Mapped to the steps in the project brief:
     four come from one CORE request, so switching is instant and costs nothing against the
     rate limit. Placeholder values are dropped; names CORE spells two ways are left apart and
     the chart says so.
-14. **Tests.** 95 unit tests covering the API service, data cleaning, the boolean parser and
+14. **Highlighted matches.** Query words are marked in each title and abstract, for both the
+    CORE search and the refine box. Terms under `NOT` are left unmarked, and `title:` terms
+    are marked in titles only.
+15. **Tests.** 106 unit tests covering the API service, data cleaning, the boolean parser and
     matcher, the search store (cancellation, caching, paging, fallback), chart data and URL
     handling.
 
