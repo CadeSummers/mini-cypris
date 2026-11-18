@@ -50,9 +50,15 @@ function orNull(value: string | null | undefined): string | null {
   return cleaned ? cleaned : null;
 }
 
-/** Some repositories append an internal id to names: "Xiao Liu (13082469)". */
+/**
+ * Some repositories append an internal id to names ("Xiao Liu (13082469)") or
+ * a profile link ("Richardson, Michael ; https://orcid.org/..."). Keep the name.
+ */
 function cleanAuthor(name: string | null | undefined): string {
-  return cleanText(name).replace(/\s*\(\d+\)$/, '');
+  return cleanText(name)
+    .replace(/[\s;,]*https?:\/\/\S*/g, '')
+    .replace(/\s*\(\d+\)$/, '')
+    .trim();
 }
 
 export function parseYear(value: number | string | null | undefined): number | null {

@@ -36,7 +36,12 @@ describe('toPaper', () => {
       id: 42,
       title: null,
       abstract: '',
-      authors: [{ name: 'Xiao Liu (13082469)' }, { name: '' }],
+      authors: [
+        { name: 'Xiao Liu (13082469)' },
+        { name: '' },
+        { name: 'Richardson, Michael ; https://orcid.org/0000-0001-2345-6789' },
+        { name: 'https://orcid.org/' },
+      ],
       yearPublished: '2025',
       doi: '',
       downloadUrl: '',
@@ -46,7 +51,7 @@ describe('toPaper', () => {
     expect(paper).toEqual({
       id: '42',
       title: 'Untitled',
-      authors: ['Xiao Liu'],
+      authors: ['Xiao Liu', 'Richardson, Michael'],
       abstract: '',
       year: 2025,
       doi: null,
