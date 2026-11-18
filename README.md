@@ -112,7 +112,8 @@ Mapped to the steps in the project brief:
     table alternative for the chart, keyboard-reachable year selection, reduced-motion support.
 12. **Deployable without leaking the key.** A small Cloudflare Worker stands in for the dev
     proxy, holds the key as an encrypted secret, and is restricted to the two CORE endpoints
-    the app needs.
+    the app needs. It caches successful
+    answers at the edge so repeated queries do not spend the shared rate limit.
 13. **Tests.** 83 unit tests covering the API service, data cleaning, the boolean parser and
     matcher, the search store (cancellation, caching, paging, fallback) and URL handling.
 
@@ -131,7 +132,8 @@ wrangler.jsonc  Cloudflare build output and routing settings
 ## Known limitations
 
 - A deployed copy shares one CORE key, and therefore one rate limit, among all its visitors.
-  The Worker does no per-user limiting.
+  The Worker caches repeated queries (searches for 10 minutes, year counts for an hour) but
+  does no per-user limiting, so a burst of new queries can still be rate-limited.
 - The in-browser refine filter matches by substring and only sees the loaded papers; it is a
   convenience on top of CORE's search, not a replacement for it.
 - CORE pages by offset only up to 10,000 results; "Load more" stops there.

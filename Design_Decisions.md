@@ -134,7 +134,13 @@ Details of the Worker:
   `POST /v3/search/works/aggregate` are forwarded. A public URL that forwarded anything would
   let strangers spend the key on any CORE endpoint.
 - It passes CORE's rate-limit headers through, so the "try again at" message works when
-  deployed, and marks successful searches cacheable for five minutes to save requests.
+  deployed.
+- It caches successful answers at Cloudflare's edge: ten minutes for searches, an hour for
+  year counts, which change slowly. Every visitor shares one key and about ten requests a
+  minute, so a repeated query (an example chip, a shared link, a reviewer retracing their
+  steps) should cost nothing. Errors and rate-limit responses are never cached. The Cache
+  API stores only GET requests, so the aggregate `POST` is keyed by a hash of its body. A
+  response header, `x-proxy-cache: HIT|MISS`, shows which path was taken.
 - It has no dependencies and uses only web-standard `Request`/`Response`/`fetch`.
 
 I first wrote this as a Netlify function and then moved it to Cloudflare for the reasons
@@ -142,8 +148,9 @@ above (both commits are in the history). The move changed about ten lines, which
 benefit of keeping the proxy to web-standard APIs.
 
 **Trade-off, stated plainly.** The deployed site shares one key, and so one rate limit, among
-everyone using it. That is fine for a demo and wrong for a product, where the backend would
-cache and rate-limit per user. The dev proxy and the Worker also duplicate a little logic
+everyone using it. The edge cache softens this for repeated queries, but a burst of distinct
+new queries can still hit the limit, and cached results can be up to ten minutes old. That is
+fine for a demo; a product would also rate-limit per user. The dev proxy and the Worker also duplicate a little logic
 (adding the header); I kept them separate because each is under a screen of code and they run
 in different runtimes.
 
@@ -386,8 +393,8 @@ error mapping and URL parsing. Prettier for formatting. Every commit builds and 
 
 ## What I would do next
 
-1. Server-side caching and per-user rate limiting in the Worker, so one busy visitor cannot
-   use up the shared CORE allowance.
+1. Per-user rate limiting in the Worker, so one busy visitor cannot use up the shared CORE
+   allowance.
 2. More chart dimensions (top authors, document type) using the same aggregate endpoint.
 3. Highlight matched terms in titles and abstracts.
 4. Saved searches and export of results (CSV / BibTeX).
