@@ -1,0 +1,33 @@
+.site-header {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.site-header .wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding-block: 0.9rem;
+}
+
+.brand {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.tagline {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.wrap {
+  max-width: 960px;
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+
+main.wrap {
+  padding-block: 1.5rem 4rem;
+}
