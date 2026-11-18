@@ -555,10 +555,71 @@ error mapping and URL parsing. Prettier for formatting. Every commit builds and 
 
 **Not done, and why.**
 
-- _Chart rendering tests_: jsdom has no canvas. The chart's data pipeline is tested; the
-  drawing was checked by hand in the browser.
-- _End-to-end tests (Playwright)_: valuable next step; they would need a mocked CORE to avoid
-  the rate limit.
+- _Chart rendering in unit tests_: jsdom has no canvas. The chart's data pipeline is unit
+  tested; the chart on screen is covered by the end-to-end tests below.
+
+### 11a. End-to-end tests against a mocked CORE
+
+_Brief step 7 ("working" at each stage), steps 3 to 6 (each feature has a test), step 8
+(additions)._
+
+**Decision.** 18 Playwright tests in `e2e/` drive the app in a real Chromium browser. CORE is
+replaced at the network boundary: `e2e/mock-core.ts` answers the two endpoints the app
+calls with made-up data, records every request, and fails the test if the app calls anything
+else under `/core-api/`. They run with `npm run e2e` and as a second job in CI.
+
+**Why.**
+
+- **Unit tests check the parts; these check that the parts are connected.** A unit test can
+  prove the store sends the right offset. Only a browser test proves that clicking "Load 10
+  more" reaches the store and that ten more cards appear.
+- **Each requirement in the brief has a test a reviewer can read.** Listing papers (step 3),
+  the number of papers (step 4), boolean search (step 5) and the chart counting every match
+  (step 6) are each a named test.
+- **The mock sits at the network, not inside Angular.** The real `HttpClient`, router, store
+  and components all run. The only thing replaced is CORE itself.
+- **Not the real CORE.** Real requests would spend the rate limit (18 tests make about 50
+  requests; the key allows about 10 a minute), need the key in CI, and fail whenever CORE is
+  slow. They would also make it impossible to test a 429 or a 503 on demand.
+- **The tests assert on requests, not only on the screen.** "Refining does not ask CORE
+  again" and "choosing a year does not refetch the counts" are claims about what is _not_
+  sent, so the mock records every call.
+- **Elements are found the way a user finds them**, by role and label ("Boolean search",
+  "Papers to fetch", the alert, "List papers from 2023"). No test ids were added to the app.
+  If a label is removed, the test fails, which also protects accessibility.
+- **Two tests run axe**, an automated accessibility checker, on the empty page and on a page
+  of results.
+
+**What the tests found.** The first run of the accessibility scan failed: the page had no
+level-one heading, because "Mini-Cypris" in the header was a plain `<span>`. It is now an
+`<h1>`. The 106 unit tests could not have caught this.
+
+**I also checked that the tests can fail.** I changed the API client to always send
+`limit=10`; the "papers to fetch" test failed as it should, and I reverted the change.
+
+**Trade-offs, stated plainly.**
+
+- **A mock proves the app handles the responses I wrote, not that CORE still sends them.**
+  If CORE renames a field, these tests stay green. The deployed site is the check for that.
+- **The year drill-down is driven through the chart's "View as table" buttons,** not by
+  clicking a bar. Clicking a pixel position on a canvas breaks whenever the layout shifts.
+  Both routes call the same handler, but the bar click itself is still only checked by hand.
+- **The Worker is not covered.** These tests run against the dev server. The cache and the
+  per-visitor limit were checked on the deployed site (section 4a).
+- **Chromium only.** Adding Firefox and WebKit is one line each in `playwright.config.ts`
+  but triples the CI time.
+- **Automated accessibility checks find only some problems** (commonly estimated at a third
+  to a half). They do not replace testing with a keyboard and a screen reader.
+
+**Alternatives.**
+
+- _Cypress_: also good; Playwright is faster to start, runs tests in parallel for free, and
+  its network mocking and request recording needed no plugin.
+- _Angular component tests in jsdom_: no real layout, no canvas, no real router history.
+- _A fake CORE server process_: more realistic than route interception, but another thing to
+  start and keep in step, for no extra coverage of the app.
+- _Recording real CORE responses_ and replaying them: realistic data, but it would put
+  real papers' abstracts in the repository and still go stale.
 
 ---
 
@@ -569,5 +630,6 @@ error mapping and URL parsing. Prettier for formatting. Every commit builds and 
 2. Drill-down from the document type chart, the one extra dimension where CORE's filter
    matched the charted count exactly.
 3. Saved searches and export of results (CSV / BibTeX).
-4. End-to-end tests against a mocked CORE.
+4. End-to-end tests of the Worker itself (cache and per-visitor limit) through `wrangler dev`,
+   with CORE mocked upstream.
 5. Dark theme: colours are already CSS custom properties, so this is mostly a second palette.

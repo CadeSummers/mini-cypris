@@ -51,9 +51,13 @@ requests on the server side, so it never reaches the browser bundle.
 | --------------------------- | ---------------------------------------------------------------- |
 | `npm test`                  | Runs the unit tests (Vitest) in watch mode                       |
 | `npm test -- --watch=false` | Runs the unit tests once                                         |
+| `npm run e2e`               | Runs the end-to-end tests (Playwright) against a mocked CORE     |
 | `npm run build`             | Production build into `dist/`                                    |
 | `npm run preview`           | Builds, then serves the app and the Worker locally with Wrangler |
 | `npm run deploy`            | Builds, then deploys to Cloudflare                               |
+
+The end-to-end tests need a browser the first time: `npx playwright install chromium`. They
+start the dev server themselves and need no API key, because every CORE request is mocked.
 
 `npm start` is the way to develop locally: API calls go through the dev-server proxy, so
 opening a static copy of `dist/` directly will not reach CORE.
@@ -134,6 +138,10 @@ Mapped to the steps in the project brief:
 15. **Tests.** 106 unit tests covering the API service, data cleaning, the boolean parser and
     matcher, the search store (cancellation, caching, paging, fallback), chart data and URL
     handling.
+16. **End-to-end tests.** 18 Playwright tests drive the app in a real browser against a
+    mocked CORE: search, the number of papers, invalid syntax, year drill-down, refine, load
+    more, both rate-limit messages, shareable URLs, the chart switcher and its fallback, plus
+    two automated accessibility scans. They run in CI on every push.
 
 ## Project layout
 
@@ -145,6 +153,7 @@ src/app/
 proxy.conf.mjs  dev-server proxy that adds the API key
 worker/         the same proxy as a Cloudflare Worker, for the deployed site
 wrangler.jsonc  Cloudflare build output and routing settings
+e2e/            Playwright end-to-end tests and the mocked CORE they run against
 ```
 
 ## Known limitations
@@ -158,8 +167,9 @@ wrangler.jsonc  Cloudflare build output and routing settings
 - CORE pages by offset only up to 10,000 results; "Load more" stops there.
 - Only the year chart drills down. CORE's publisher and author filters do not match the
   charted counts exactly, so those bars are not clickable.
-- The chart component itself is verified by hand in the browser. Its data logic is unit
-  tested, but canvas rendering is not.
+- The end-to-end tests use a mocked CORE, so they would not notice CORE changing its
+  response format, and they do not cover the Cloudflare Worker. Clicking a bar on the chart
+  canvas is checked by hand; the tests use the chart's table view for the same action.
 
 ## A note on AI assistance
 

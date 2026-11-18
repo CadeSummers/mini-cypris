@@ -50,3 +50,7 @@ Thumbs.db
 # Cloudflare Wrangler local state and local secrets
 .wrangler/
 .dev.vars
+
+# Playwright
+test-results/
+playwright-report/

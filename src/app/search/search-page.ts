@@ -72,7 +72,6 @@ export class SearchPage {
   /** True when a valid filter is narrowing the list. */
   protected readonly refining = computed(() => this.refine()?.ok === true);
 
-  /** While the filter is incomplete or invalid, keep showing everything. */
   /** Words to mark on the cards: from the CORE query and, if valid, the refine box. */
   protected readonly highlight = computed(() => {
     const query = this.store.request()?.query;
@@ -81,6 +80,7 @@ export class SearchPage {
     return collectHighlightTerms(search?.ok ? search.ast : null, refine?.ok ? refine.ast : null);
   });
 
+  /** While the filter is incomplete or invalid, keep showing everything. */
   protected readonly visiblePapers = computed(() => {
     const refine = this.refine();
     const papers = this.store.papers();
