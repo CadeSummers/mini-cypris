@@ -12,13 +12,13 @@ query.
 Built as a take-home project for Cypris. The reasoning behind each choice, with the
 alternatives considered, is in [Design_Decisions.md](Design_Decisions.md).
 
-![A 15-second demo: a boolean search, clicking the 2021 bar to list that year's papers, then refining the loaded papers in the browser](docs/demo.gif)
+![A 20-second demo: a boolean search, switching the chart to publishers and authors, clicking the 2021 bar to list that year's papers, then refining the loaded papers in the browser](docs/demo.gif)
 
 ![Search results for a boolean query, with the papers-per-year chart above the paper cards](docs/search-desktop.png)
 
-| Year drill-down                                                                                     | Phone width                                                          |
-| --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| ![The 2021 bar selected in the chart, with the list narrowed to that year](docs/year-drilldown.png) | ![The same search at a 390-pixel-wide screen](docs/search-phone.png) |
+| Year drill-down                                                                                     | Chart by publisher                                                                        | Phone width                                                          |
+| --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| ![The 2021 bar selected in the chart, with the list narrowed to that year](docs/year-drilldown.png) | ![The ten most common publishers for the query as ranked bars](docs/chart-publishers.png) | ![The same search at a 390-pixel-wide screen](docs/search-phone.png) |
 
 ## Run it
 
@@ -79,15 +79,15 @@ cannot be used as a general-purpose proxy for the key (see
 
 Mapped to the steps in the project brief:
 
-| Brief | Requirement                         | Where                                                                                          |
-| ----- | ----------------------------------- | ---------------------------------------------------------------------------------------------- |
-| 1     | Angular 20 or higher                | Angular 21: standalone components, signals, zoneless change detection                          |
-| 2     | Query CORE with GET                 | `src/app/core-api/core-api.ts`                                                                 |
-| 3     | Clean UI for paper objects          | Paper cards: title, authors, year, publisher, expandable abstract, PDF and DOI links           |
-| 4     | Field for how many papers to return | "Papers to fetch" (1–100); changing it re-runs the current search                              |
-| 5     | Boolean keyword search              | Main bar queries CORE; "Refine these papers" filters the loaded papers with the same syntax    |
-| 6     | Chart aggregating all matches       | Papers per year from CORE's aggregate endpoint, covering every match, not just the loaded page |
-| 7     | README and incremental commits      | This file; each commit builds, passes its tests and runs                                       |
+| Brief | Requirement                         | Where                                                                                                                                                    |
+| ----- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | Angular 20 or higher                | Angular 21: standalone components, signals, zoneless change detection                                                                                    |
+| 2     | Query CORE with GET                 | `src/app/core-api/core-api.ts`                                                                                                                           |
+| 3     | Clean UI for paper objects          | Paper cards: title, authors, year, publisher, expandable abstract, PDF and DOI links                                                                     |
+| 4     | Field for how many papers to return | "Papers to fetch" (1–100); changing it re-runs the current search                                                                                        |
+| 5     | Boolean keyword search              | Main bar queries CORE; "Refine these papers" filters the loaded papers with the same syntax                                                              |
+| 6     | Chart aggregating all matches       | Papers per year from CORE's aggregate endpoint, covering every match, not just the loaded page; switchable to top document types, publishers and authors |
+| 7     | README and incremental commits      | This file; each commit builds, passes its tests and runs                                                                                                 |
 
 ## Additions beyond the brief
 
@@ -122,8 +122,13 @@ Mapped to the steps in the project brief:
     proxy, holds the key as an encrypted secret, and is restricted to the two CORE endpoints
     the app needs. It caches successful
     answers at the edge so repeated queries do not spend the shared rate limit.
-13. **Tests.** 83 unit tests covering the API service, data cleaning, the boolean parser and
-    matcher, the search store (cancellation, caching, paging, fallback) and URL handling.
+13. **Chart dimension switcher.** "Chart by" Year, Document type, Publisher or Author. All
+    four come from one CORE request, so switching is instant and costs nothing against the
+    rate limit. Placeholder values are dropped; names CORE spells two ways are left apart and
+    the chart says so.
+14. **Tests.** 95 unit tests covering the API service, data cleaning, the boolean parser and
+    matcher, the search store (cancellation, caching, paging, fallback), chart data and URL
+    handling.
 
 ## Project layout
 
@@ -131,7 +136,7 @@ Mapped to the steps in the project brief:
 src/app/
   core-api/     CORE client, raw response types, the clean Paper model, error mapping
   search/       search page, search bar, paper card, search store, boolean parser and matcher
-  chart/        year chart component and the pure functions that build its data
+  chart/        year chart, ranked top-ten chart, the switcher, and the pure functions behind them
 proxy.conf.mjs  dev-server proxy that adds the API key
 worker/         the same proxy as a Cloudflare Worker, for the deployed site
 wrangler.jsonc  Cloudflare build output and routing settings
@@ -145,6 +150,8 @@ wrangler.jsonc  Cloudflare build output and routing settings
 - The in-browser refine filter matches by substring and only sees the loaded papers; it is a
   convenience on top of CORE's search, not a replacement for it.
 - CORE pages by offset only up to 10,000 results; "Load more" stops there.
+- Only the year chart drills down. CORE's publisher and author filters do not match the
+  charted counts exactly, so those bars are not clickable.
 - The chart component itself is verified by hand in the browser. Its data logic is unit
   tested, but canvas rendering is not.
 
