@@ -35,14 +35,32 @@ requests on the server side, so it never reaches the browser bundle.
 
 ### Other commands
 
-| Command                     | What it does                               |
-| --------------------------- | ------------------------------------------ |
-| `npm test`                  | Runs the unit tests (Vitest) in watch mode |
-| `npm test -- --watch=false` | Runs the unit tests once                   |
-| `npm run build`             | Production build into `dist/`              |
+| Command                     | What it does                                                     |
+| --------------------------- | ---------------------------------------------------------------- |
+| `npm test`                  | Runs the unit tests (Vitest) in watch mode                       |
+| `npm test -- --watch=false` | Runs the unit tests once                                         |
+| `npm run build`             | Production build into `dist/`                                    |
+| `npm run preview`           | Builds, then serves the app and the Worker locally with Wrangler |
+| `npm run deploy`            | Builds, then deploys to Cloudflare                               |
 
-`npm start` is the supported way to run the app: API calls go through the dev-server proxy,
-so a static copy of `dist/` would need an equivalent proxy in front of it (see
+`npm start` is the way to develop locally: API calls go through the dev-server proxy, so
+opening a static copy of `dist/` directly will not reach CORE.
+
+### Deploying (Cloudflare Workers)
+
+The repository is ready to deploy to [Cloudflare](https://developers.cloudflare.com/workers/):
+`wrangler.jsonc` serves the built app as static assets, and `worker/core-proxy.js` plays the
+role of the dev proxy, serving `/core-api/*` and adding the key on the server.
+
+```bash
+npx wrangler login                     # once; opens the browser
+npx wrangler secret put CORE_API_KEY   # paste the key when prompted; stored encrypted
+npm run deploy
+```
+
+If `secret put` says the Worker does not exist yet, run `npm run deploy` first, then set the
+secret. The Worker forwards only the two CORE endpoints the app uses, so the public URL
+cannot be used as a general-purpose proxy for the key (see
 [Design_Decisions.md](Design_Decisions.md#4-api-key-and-the-dev-proxy)).
 
 ## What it does
@@ -88,7 +106,10 @@ Mapped to the steps in the project brief:
     messages for rate limiting, bad queries, a rejected key, server errors and being offline.
 11. **Accessibility.** Labelled controls, live regions for status changes, a text summary and
     table alternative for the chart, keyboard-reachable year selection, reduced-motion support.
-12. **Tests.** 83 unit tests covering the API service, data cleaning, the boolean parser and
+12. **Deployable without leaking the key.** A small Cloudflare Worker stands in for the dev
+    proxy, holds the key as an encrypted secret, and is restricted to the two CORE endpoints
+    the app needs.
+13. **Tests.** 83 unit tests covering the API service, data cleaning, the boolean parser and
     matcher, the search store (cancellation, caching, paging, fallback) and URL handling.
 
 ## Project layout
@@ -99,12 +120,14 @@ src/app/
   search/       search page, search bar, paper card, search store, boolean parser and matcher
   chart/        year chart component and the pure functions that build its data
 proxy.conf.mjs  dev-server proxy that adds the API key
+worker/         the same proxy as a Cloudflare Worker, for the deployed site
+wrangler.jsonc  Cloudflare build output and routing settings
 ```
 
 ## Known limitations
 
-- There is no production hosting story: the key lives in the dev proxy, so deploying would
-  need a small backend to play the same role.
+- A deployed copy shares one CORE key, and therefore one rate limit, among all its visitors.
+  The Worker does no per-user limiting.
 - The in-browser refine filter matches by substring and only sees the loaded papers; it is a
   convenience on top of CORE's search, not a replacement for it.
 - CORE pages by offset only up to 10,000 results; "Load more" stops there.

@@ -111,18 +111,53 @@ key at all.
 - It avoids depending on CORE's CORS behaviour for the `POST` aggregate request.
 - A reviewer can clone and run without requesting a key.
 
-**Trade-off, stated plainly.** There is no production deployment: a static build of this app
-needs a small backend doing what the dev proxy does. `CoreApi` takes its base URL from an
-injection token (`CORE_API_BASE_URL`) so that pointing it at such a backend is a one-line
-change.
+**Deployment: a Cloudflare Worker.** A static build has no dev server, so the deployed site
+needs something doing the proxy's job. `worker/core-proxy.js` is that: one Worker, mounted at
+the same `/core-api/*` path, that adds the key from a Worker secret. `wrangler.jsonc` serves
+the built Angular files directly and sends only API calls to the Worker. The Angular code is
+identical in development and production; nothing in `src/` knows which proxy it is talking
+to.
+
+I chose Cloudflare for three reasons:
+
+- **Familiarity.** I have deployed on Cloudflare in a previous project, so I could spend the
+  time on the proxy's behaviour, not on learning a host.
+- **Adoption.** It is one of the most widely used edge platforms, so the setup is one a
+  reviewer or teammate is likely to recognise and can maintain.
+- **Security of the key.** The key is stored as a Worker secret: encrypted, not readable
+  again from the dashboard or CLI once saved, absent from the repository and from the
+  JavaScript sent to the browser, and available only to the Worker at run time.
+
+Details of the Worker:
+
+- It is an allowlist, not an open proxy: only `GET /v3/search/works/` and
+  `POST /v3/search/works/aggregate` are forwarded. A public URL that forwarded anything would
+  let strangers spend the key on any CORE endpoint.
+- It passes CORE's rate-limit headers through, so the "try again at" message works when
+  deployed, and marks successful searches cacheable for five minutes to save requests.
+- It has no dependencies and uses only web-standard `Request`/`Response`/`fetch`.
+
+I first wrote this as a Netlify function and then moved it to Cloudflare for the reasons
+above (both commits are in the history). The move changed about ten lines, which is the
+benefit of keeping the proxy to web-standard APIs.
+
+**Trade-off, stated plainly.** The deployed site shares one key, and so one rate limit, among
+everyone using it. That is fine for a demo and wrong for a product, where the backend would
+cache and rate-limit per user. The dev proxy and the Worker also duplicate a little logic
+(adding the header); I kept them separate because each is under a screen of code and they run
+in different runtimes.
 
 **Alternatives.**
 
 - _Key in `environment.ts`_ (the starter's approach): simplest, but leaks the key.
 - _Key typed into the UI and kept in `localStorage`_: works on static hosting, but adds a
   setup step for every user and stores a secret in the browser.
-- _A small Express/serverless backend_: the right answer for production; out of scope for a
-  front-end exercise.
+- _An Express server_: works, but needs an always-on host for what is one small function.
+- _Netlify or Vercel functions_: equivalent in capability; see the reasons for Cloudflare
+  above.
+- _Cloudflare Pages Functions_: also works, but Cloudflare now points new projects to Workers
+  with static assets, which is what this uses.
+- _GitHub Pages_: free and simple, but static only, so the key problem would be unsolved.
 
 ---
 
@@ -351,8 +386,8 @@ error mapping and URL parsing. Prettier for formatting. Every commit builds and 
 
 ## What I would do next
 
-1. A tiny backend (or serverless function) to replace the dev proxy, so the app can be
-   deployed.
+1. Server-side caching and per-user rate limiting in the Worker, so one busy visitor cannot
+   use up the shared CORE allowance.
 2. More chart dimensions (top authors, document type) using the same aggregate endpoint.
 3. Highlight matched terms in titles and abstracts.
 4. Saved searches and export of results (CSV / BibTeX).

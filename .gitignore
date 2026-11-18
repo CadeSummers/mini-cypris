@@ -46,3 +46,7 @@ Thumbs.db
 # Local-only material (assessment brief, notes) and secrets
 /project_context/
 .env
+
+# Cloudflare Wrangler local state and local secrets
+.wrangler/
+.dev.vars
