@@ -52,6 +52,7 @@ requests on the server side, so it never reaches the browser bundle.
 | `npm test`                  | Runs the unit tests (Vitest) in watch mode                       |
 | `npm test -- --watch=false` | Runs the unit tests once                                         |
 | `npm run e2e`               | Runs the end-to-end tests (Playwright) against a mocked CORE     |
+| `npm run test:worker`       | Runs the Cloudflare Worker's tests in a local Workers runtime    |
 | `npm run build`             | Production build into `dist/`                                    |
 | `npm run preview`           | Builds, then serves the app and the Worker locally with Wrangler |
 | `npm run deploy`            | Builds, then deploys to Cloudflare                               |
@@ -142,6 +143,10 @@ Mapped to the steps in the project brief:
     mocked CORE: search, the number of papers, invalid syntax, year drill-down, refine, load
     more, both rate-limit messages, shareable URLs, the chart switcher and its fallback, plus
     two automated accessibility scans. They run in CI on every push.
+17. **Worker tests.** 12 tests run the real Worker in Cloudflare's runtime locally (Miniflare)
+    against a fake CORE. They check that the key is sent to CORE and never to the browser,
+    that only the two allowed endpoints are proxied, that repeated queries come from the
+    cache, and that a visitor's 9th new request in a minute is refused.
 
 ## Project layout
 
@@ -151,7 +156,7 @@ src/app/
   search/       search page, search bar, paper card, search store, boolean parser and matcher
   chart/        year chart, ranked top-ten chart, the switcher, and the pure functions behind them
 proxy.conf.mjs  dev-server proxy that adds the API key
-worker/         the same proxy as a Cloudflare Worker, for the deployed site
+worker/         the same proxy as a Cloudflare Worker, for the deployed site, and its tests
 wrangler.jsonc  Cloudflare build output and routing settings
 e2e/            Playwright end-to-end tests and the mocked CORE they run against
 ```
@@ -168,8 +173,11 @@ e2e/            Playwright end-to-end tests and the mocked CORE they run against
 - Only the year chart drills down. CORE's publisher and author filters do not match the
   charted counts exactly, so those bars are not clickable.
 - The end-to-end tests use a mocked CORE, so they would not notice CORE changing its
-  response format, and they do not cover the Cloudflare Worker. Clicking a bar on the chart
-  canvas is checked by hand; the tests use the chart's table view for the same action.
+  response format. Clicking a bar on the chart canvas is checked by hand; the tests use the
+  chart's table view for the same action.
+- The Worker's tests run in a local copy of Cloudflare's runtime. The routing between the
+  app's files and the Worker, and the 60-second limit window actually expiring, are checked
+  on the deployed site only.
 
 ## A note on AI assistance
 

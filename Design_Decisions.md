@@ -233,6 +233,74 @@ passed 8 requests and refused the 9th, and a search already in the cache was sti
 
 ---
 
+### 4b. Testing the Worker
+
+_Brief step 2 (use the API responsibly), step 7 ("working" at each stage), step 8 (additions)._
+
+**Decision.** 12 tests in `worker/core-proxy.test.mjs` run the real Worker in Cloudflare's
+runtime on my machine and in CI, with CORE replaced by a fake. They use Miniflare (the
+engine inside `wrangler dev`) as a library and Node's built-in test runner. Run them with
+`npm run test:worker`.
+
+**What they prove.**
+
+- **The key.** It is added to the request that goes to CORE, and it appears nowhere in the
+  response body or headers. An `Authorization` header sent by the browser is not forwarded.
+  With no key configured, no `Authorization` header is sent at all.
+- **Not an open proxy.** Other CORE paths, other methods and a `../` path all get 404, and
+  the fake CORE receives nothing.
+- **The cache.** A repeated search is served from the cache and CORE is called once, even if
+  the parameters arrive in a different order. Aggregate requests are cached by their body.
+  Errors are never cached.
+- **The per-visitor limit.** 8 new searches pass; the 9th gets 429 with `x-proxy-limit:
+visitor` and a retry time one minute after the first; CORE saw exactly 8 requests. While
+  over the limit, a cached search is still served, and a different IP address is unaffected.
+- **Header filtering.** An upstream `set-cookie` or internal header is dropped; the
+  rate-limit headers the app reads are kept.
+- **Failure.** CORE's own 429 passes through and is told apart from the Worker's. If CORE
+  cannot be reached, the Worker answers 502.
+
+**Why.**
+
+- **This is the only code that handles the key.** "The key never reaches the browser" was a
+  sentence in the README. Now it is a test.
+- **The earlier checks were manual.** I verified the cache and the limit by sending requests
+  to the deployed site. That spends the real allowance and nobody repeats it on every change.
+- **The real runtime, not a stand-in.** The Worker uses the Cache API, a Durable Object and
+  `crypto.subtle`. Mocking those in Node would test my mocks. Miniflare runs `workerd`, the
+  same runtime Cloudflare runs in production.
+- **No production code was changed to make it testable.** Miniflare can intercept the
+  Worker's outbound `fetch`, so the fake CORE is supplied by the test, not by a setting in
+  the Worker.
+- **Each test is its own visitor** (its own IP address and query text), so tests cannot use
+  up each other's allowance or read each other's cache entries.
+
+**I checked that the tests can fail.** Changing `VISITOR_LIMIT` from 8 to 9 made both limit
+tests fail; I reverted it.
+
+**Trade-offs, stated plainly.**
+
+- **The window expiring after 60 seconds is not tested.** I cannot move the runtime's clock,
+  and really waiting would add a minute to every CI run. The test checks the retry time the
+  Worker returns instead.
+- **It is Cloudflare's runtime, but not Cloudflare's network.** The routing in
+  `wrangler.jsonc` (which paths reach the Worker), the real edge cache across locations and
+  the deployed secret are still only checked on the live site.
+- **Miniflare is pinned as its own dev dependency (version 4).** The copy bundled inside
+  Wrangler was a version 5 beta whose options differ from the published documentation, so I
+  did not build on it. The cost is a second copy in `node_modules`.
+
+**Alternatives.**
+
+- _Starting `wrangler dev` as a separate process_ and sending it HTTP requests: closest to
+  how it is run by hand, but it needs a port, a wait for start-up, and a change to the Worker
+  to point it at a fake CORE. It also hung on my machine while I was building the limiter.
+- _`@cloudflare/vitest-pool-workers`_, Cloudflare's own test integration: runs tests inside
+  the runtime with isolated storage per test. It ties the project to a specific Vitest
+  version, and Angular's test builder already chooses one.
+- _Unit-testing the helper functions in Node_: fast, but it skips the parts most likely to be
+  wrong (cache keys, the Durable Object, header handling on real `Response` objects).
+
 ## 5. Presenting papers
 
 _Brief step 3: "a clean and intuitive design of your making."_
@@ -604,8 +672,8 @@ level-one heading, because "Mini-Cypris" in the header was a plain `<span>`. It 
 - **The year drill-down is driven through the chart's "View as table" buttons,** not by
   clicking a bar. Clicking a pixel position on a canvas breaks whenever the layout shifts.
   Both routes call the same handler, but the bar click itself is still only checked by hand.
-- **The Worker is not covered.** These tests run against the dev server. The cache and the
-  per-visitor limit were checked on the deployed site (section 4a).
+- **The Worker is not covered here.** These tests run against the dev server. The Worker has
+  its own tests (section 4b).
 - **Chromium only.** Adding Firefox and WebKit is one line each in `playwright.config.ts`
   but triples the CI time.
 - **Automated accessibility checks find only some problems** (commonly estimated at a third
@@ -630,6 +698,6 @@ level-one heading, because "Mini-Cypris" in the header was a plain `<span>`. It 
 2. Drill-down from the document type chart, the one extra dimension where CORE's filter
    matched the charted count exactly.
 3. Saved searches and export of results (CSV / BibTeX).
-4. End-to-end tests of the Worker itself (cache and per-visitor limit) through `wrangler dev`,
-   with CORE mocked upstream.
+4. One test that runs the browser suite against the Worker and the built app together, so the
+   routing in `wrangler.jsonc` is covered too.
 5. Dark theme: colours are already CSS custom properties, so this is mostly a second palette.
