@@ -1,0 +1,49 @@
+:host {
+  display: block;
+}
+
+app-year-chart,
+app-ranked-chart {
+  display: block;
+}
+
+// `display: block` above would otherwise override the hidden attribute.
+[hidden] {
+  display: none;
+}
+
+.switcher {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+
+.switcher-label {
+  margin-right: 0.2rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+button {
+  padding: 0.3rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--accent);
+    color: var(--accent-strong);
+  }
+
+  &[aria-pressed='true'] {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: #fff;
+  }
+}

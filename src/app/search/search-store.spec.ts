@@ -211,6 +211,50 @@ describe('SearchStore', () => {
       expect(store.chart()?.series.points).toEqual([{ year: 2020, count: 1 }]);
     });
 
+    it('ranks document types, publishers and authors from the same aggregate', () => {
+      expect(store.breakdowns()).toBeNull();
+
+      store.search({ query: 'drone', limit: 10 });
+      http.expectOne(isSearch).flush(page([1], 3));
+      http.expectOne(isAggregate).flush({
+        aggregations: {
+          yearPublished: { '2020': 40 },
+          documentType: { thesis: 30, 'research article': 10 },
+          publisher: { IEEE: 25 },
+          authors: { 'null null': 9, 'K Anderson (7837271)': 4 },
+        },
+      });
+
+      const breakdowns = store.breakdowns();
+      expect(breakdowns?.documentType.items).toEqual([
+        { label: 'Thesis', count: 30 },
+        { label: 'Research article', count: 10 },
+      ]);
+      expect(breakdowns?.publisher.items).toEqual([{ label: 'IEEE', count: 25 }]);
+      expect(breakdowns?.authors.items).toEqual([{ label: 'K Anderson', count: 4 }]);
+    });
+
+    it('ranks the loaded papers when the aggregate fails', () => {
+      store.search({ query: 'drone', limit: 10 });
+      http.expectOne(isSearch).flush({
+        totalHits: 2,
+        limit: 10,
+        offset: 0,
+        results: [
+          { id: 1, publisher: 'IEEE', authors: [{ name: 'A' }] },
+          { id: 2, publisher: 'IEEE', authors: [{ name: 'A' }, { name: 'B' }] },
+        ],
+      });
+      http.expectOne(isAggregate).flush('boom', { status: 500, statusText: 'Server Error' });
+
+      expect(store.breakdowns()?.publisher.items).toEqual([{ label: 'IEEE', count: 2 }]);
+      expect(store.breakdowns()?.authors.items).toEqual([
+        { label: 'A', count: 2 },
+        { label: 'B', count: 1 },
+      ]);
+      expect(store.breakdowns()?.documentType.items).toEqual([]);
+    });
+
     it('keeps the whole-query aggregate when the limit or year changes', () => {
       store.search({ query: 'drone', limit: 10 });
       http.expectOne(isSearch).flush(page([1], 3));

@@ -23,9 +23,10 @@ export interface CoreSearchResponse {
   results?: CoreWork[] | null;
 }
 
+/**
+ * Each requested field maps a value to the number of matching works. CORE
+ * returns an empty array, not an empty object, when a field has no values.
+ */
 export interface CoreAggregationResponse {
-  aggregations?: {
-    /** Year (as a string key) to number of matching works. */
-    yearPublished?: Record<string, number>;
-  } | null;
+  aggregations?: Record<string, Record<string, number> | unknown[] | null> | null;
 }

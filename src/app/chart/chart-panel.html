@@ -1,0 +1,33 @@
+<div class="switcher" role="group" aria-label="Chart the matching papers by">
+  <span class="switcher-label" aria-hidden="true">Chart by</span>
+  @for (option of views; track option.view) {
+    <button
+      type="button"
+      [attr.aria-pressed]="view() === option.view"
+      (click)="view.set(option.view)"
+    >
+      {{ option.tab }}
+    </button>
+  }
+</div>
+
+<!-- Hidden, not removed, so the year chart keeps its Chart.js instance and range choice. -->
+<app-year-chart
+  [hidden]="view() !== 'year'"
+  [series]="yearSeries()"
+  [source]="source()"
+  [loading]="loading()"
+  [selectedYear]="selectedYear()"
+  (yearSelected)="yearSelected.emit($event)"
+/>
+
+@if (rankedText(); as text) {
+  <app-ranked-chart
+    [heading]="text.heading"
+    [noun]="text.noun"
+    [caveat]="text.caveat"
+    [series]="rankedSeries()"
+    [source]="source()"
+    [loading]="loading()"
+  />
+}

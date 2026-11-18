@@ -1,10 +1,17 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subject, catchError, exhaustMap, map, merge, of, switchMap, takeUntil, tap } from 'rxjs';
+import {
+  CategorySeries,
+  DIMENSIONS,
+  Dimension,
+  buildCategorySeries,
+  countByDimension,
+} from '../chart/category-series';
 import { ChartSource } from '../chart/year-chart';
 import { YearSeries, buildYearSeries, countByYear } from '../chart/year-series';
 import { ApiError, toApiError } from '../core-api/api-error';
-import { CoreApi, SearchPage } from '../core-api/core-api';
+import { Aggregations, CoreApi, SearchPage } from '../core-api/core-api';
 import { Paper } from '../core-api/paper';
 
 export interface SearchRequest {
@@ -19,12 +26,15 @@ export type SearchStatus = 'idle' | 'loading' | 'loaded' | 'error';
 /** `ready` holds CORE's counts; `unavailable` means the UI should fall back to loaded papers. */
 type AggregateState =
   | { status: 'idle' | 'loading' | 'unavailable' }
-  | { status: 'ready'; query: string; counts: Record<string, number> };
+  | { status: 'ready'; query: string; counts: Aggregations };
 
 export interface ChartData {
   series: YearSeries;
   source: ChartSource;
 }
+
+/** The same result set ranked by each non-time field. */
+export type Breakdowns = Record<Dimension, CategorySeries>;
 
 type Outcome = { ok: true; page: SearchPage } | { ok: false; error: ApiError };
 
@@ -56,7 +66,7 @@ export class SearchStore {
   private readonly cancel = new Subject<void>();
   /** Insertion-ordered, so the first key is always the oldest entry. */
   private readonly cache = new Map<string, SearchPage>();
-  private readonly aggregateCache = new Map<string, Record<string, number>>();
+  private readonly aggregateCache = new Map<string, Aggregations>();
   private readonly currentYear = new Date().getFullYear();
 
   private readonly _request = signal<SearchRequest | null>(null);
@@ -92,7 +102,10 @@ export class SearchStore {
   readonly chart = computed<ChartData | null>(() => {
     const aggregate = this._aggregate();
     if (aggregate.status === 'ready') {
-      return { series: buildYearSeries(aggregate.counts, this.currentYear), source: 'all' };
+      return {
+        series: buildYearSeries(aggregate.counts.yearPublished, this.currentYear),
+        source: 'all',
+      };
     }
     if (aggregate.status === 'unavailable' && this._status() === 'loaded') {
       return {
@@ -101,6 +114,29 @@ export class SearchStore {
       };
     }
     return null;
+  });
+
+  /**
+   * Top document types, publishers and authors. Same source rules as `chart`:
+   * CORE's counts over every match, or the loaded papers as a fallback.
+   */
+  readonly breakdowns = computed<Breakdowns | null>(() => {
+    const aggregate = this._aggregate();
+    const counts = (dimension: Dimension): Record<string, number> | null => {
+      if (aggregate.status === 'ready') return aggregate.counts[dimension];
+      if (aggregate.status === 'unavailable' && this._status() === 'loaded') {
+        return countByDimension(this._papers(), dimension);
+      }
+      return null;
+    };
+
+    const entries = DIMENSIONS.map((dimension) => {
+      const raw = counts(dimension);
+      return raw ? ([dimension, buildCategorySeries(raw, dimension)] as const) : null;
+    });
+    return entries.every((entry) => entry !== null)
+      ? (Object.fromEntries(entries) as Breakdowns)
+      : null;
   });
 
   readonly chartLoading = computed(
@@ -168,7 +204,7 @@ export class SearchStore {
           const cached = this.aggregateCache.get(query);
           if (cached) return of<AggregateState>({ status: 'ready', query, counts: cached });
 
-          return this.api.aggregateYears(query).pipe(
+          return this.api.aggregate(query).pipe(
             tap((counts) => this.aggregateCache.set(query, counts)),
             map((counts): AggregateState => ({ status: 'ready', query, counts })),
             // The chart is secondary: a failure here must not break the search.

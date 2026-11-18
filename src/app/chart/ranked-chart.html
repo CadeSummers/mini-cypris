@@ -1,0 +1,45 @@
+<section class="chart-card" aria-labelledby="ranked-title">
+  <header class="head">
+    <h2 id="ranked-title">{{ heading() }}</h2>
+    @if (hasData()) {
+      <p class="caption">
+        @if (source() === 'all') {
+          The {{ items().length }} most common {{ noun() }} across every matching paper, counted by
+          CORE.
+        } @else {
+          Only among the loaded papers — CORE's full totals are unavailable right now.
+        }
+      </p>
+    }
+  </header>
+
+  @if (hasData()) {
+    <ol class="bars">
+      @for (item of items(); track item.label) {
+        <li>
+          <span class="label">{{ item.label }}</span>
+          <span class="track" aria-hidden="true">
+            <span class="bar" [style.width.%]="width(item.count)"></span>
+          </span>
+          <span class="count"
+            >{{ item.count | number }}<span class="visually-hidden"> papers</span></span
+          >
+        </li>
+      }
+    </ol>
+
+    @if (caveat()) {
+      <p class="note">{{ caveat() }}</p>
+    }
+  } @else {
+    <p class="placeholder">
+      @if (loading()) {
+        Counting {{ noun() }}…
+      } @else if (series()) {
+        CORE has no {{ noun() }} recorded for these papers.
+      } @else {
+        Run a search to see the most common {{ noun() }} among the matching papers.
+      }
+    </p>
+  }
+</section>

@@ -2,7 +2,7 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, linkedSignal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
-import { YearChart } from '../chart/year-chart';
+import { ChartPanel } from '../chart/chart-panel';
 import { parseQuery } from './boolean-query';
 import { PaperCard } from './paper-card';
 import { filterPapers } from './paper-matcher';
@@ -33,7 +33,7 @@ export function paramsFromRequest(request: SearchRequest): Record<string, string
 
 @Component({
   selector: 'app-search-page',
-  imports: [DatePipe, DecimalPipe, PaperCard, SearchBar, YearChart],
+  imports: [DatePipe, DecimalPipe, PaperCard, SearchBar, ChartPanel],
   providers: [SearchStore],
   templateUrl: './search-page.html',
   styleUrl: './search-page.scss',

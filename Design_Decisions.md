@@ -332,11 +332,69 @@ fails, the chart falls back to counting the loaded papers and labels itself acco
   and simpler, but only reflects the loaded page. Kept as the fallback.
 - _One count request per year_: also gives true totals, but costs dozens of requests against
   a 10-per-minute limit.
-- _Other dimensions (authors, document type)_: the aggregate endpoint supports them; years
-  tell the clearest story. A dimension switcher is a natural next step.
+- _Other dimensions as the default_: years tell the clearest story, so the year chart stays
+  the default view; the others are one click away (see below).
 - _ngx-charts / D3 / ECharts_: ngx-charts tracks Angular versions slowly; D3 is more code for
   a bar chart; ECharts is much larger.
 - _A line chart_: suggests continuity between years; bars are more honest for yearly counts.
+
+### 9a. Chart dimension switcher
+
+_Brief step 6 ("aggregate data from all papers that match"), step 8 (additions)._
+
+**Decision.** A "Chart by" switcher above the chart: Year (the default), Document type,
+Publisher, Author. The last three show the ten most common values as ranked horizontal bars,
+counted by CORE over every matching paper.
+
+**Why.**
+
+- **It answers different questions about the same result set.** Year says whether a topic is
+  growing; document type says whether it is theses or journal articles; publisher and author
+  say who is producing the work. For an R&D search tool those are the natural next questions.
+- **It costs no extra requests.** CORE's aggregate endpoint accepts several fields at once, so
+  one `POST` now asks for `yearPublished`, `documentType`, `publisher` and `authors`
+  together. Switching views is instant and spends nothing against the rate limit. I checked
+  which fields CORE allows by trying them: `language` returns nothing and `journals` is
+  rejected, so they are not offered.
+- **Ranked lists are plain HTML and CSS, not Chart.js.** The labels are long names
+  ("Institute of Electrical and Electronics Engineers (IEEE)") that need to wrap, and an
+  ordered list is read correctly by a screen reader with no separate table. It also added no
+  chart code to the bundle. Chart.js stays for the year chart, where a real axis matters.
+- **Cleaning is conservative.** Placeholder values such as `null null` (the "top author" in
+  CORE's raw data for the drone query) are dropped, and values differing only by case or an
+  appended repository id are merged. Different spellings of one publisher or person are _not_
+  merged, because guessing aliases would put numbers on screen that CORE never reported. A
+  note under those two charts says so.
+- **Same fallback as the year chart.** If the aggregate fails, the lists are computed from
+  the loaded papers and labelled that way.
+- **The logic is a pure function** (`buildCategorySeries` in `chart/category-series.ts`), unit
+  tested without a browser, like the year series.
+- **The year chart is hidden, not destroyed, when another view is chosen,** so its Chart.js
+  instance and the "All years" choice survive switching back.
+
+**Trade-offs, stated plainly.**
+
+- **Only the year chart drills down.** I tested using the other values as filters:
+  `documentType:"thesis"` returned exactly the charted count, but `publisher:"IEEE"` returned
+  3,395 papers against a bar of 1,622 (CORE matches the word, not the exact name) and an
+  author filter returned none. A click that lists a different number of papers than the bar
+  shows would be worse than no click, so those bars are read-only.
+- **CORE returns its 100 largest values per field,** so the lists are a top ten, with no
+  "other" total, and merging after cleaning can only combine values within that 100.
+- **The chosen view is not in the URL.** It is a way of looking at the data, not part of the
+  search; adding it would be simple if sharing a specific view mattered.
+
+**Alternatives.**
+
+- _A separate request per dimension, made when its tab is first opened_: fewer bytes for
+  people who never switch, but each switch would spend a request against 10 per minute.
+- _Horizontal Chart.js bars_: consistent with the year chart, but poor at long labels and
+  needs its own table alternative.
+- _A pie or donut chart_: common for "share of" data, but hard to compare ten slices and
+  misleading when the ten do not add up to the whole.
+- _Alias tables for publishers_ (mapping "MDPI AG" to "Multidisciplinary Digital Publishing
+  Institute"): correct for the names I know, wrong or incomplete for the rest.
+- _Showing all four charts at once_: no switching, but pushes the results far down the page.
 
 ---
 
@@ -395,7 +453,8 @@ error mapping and URL parsing. Prettier for formatting. Every commit builds and 
 
 1. Per-user rate limiting in the Worker, so one busy visitor cannot use up the shared CORE
    allowance.
-2. More chart dimensions (top authors, document type) using the same aggregate endpoint.
+2. Drill-down from the document type chart, the one extra dimension where CORE's filter
+   matched the charted count exactly.
 3. Highlight matched terms in titles and abstracts.
 4. Saved searches and export of results (CSV / BibTeX).
 5. End-to-end tests against a mocked CORE.

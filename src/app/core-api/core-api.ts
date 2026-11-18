@@ -17,6 +17,18 @@ export const CORE_API_BASE_URL = new InjectionToken<string>('CORE_API_BASE_URL',
 /** CORE rejects page sizes above this. */
 export const MAX_PAGE_SIZE = 100;
 
+/** The fields CORE is asked to count matching works by. */
+export const AGGREGATION_FIELDS = [
+  'yearPublished',
+  'documentType',
+  'publisher',
+  'authors',
+] as const;
+export type AggregationField = (typeof AGGREGATION_FIELDS)[number];
+
+/** For each field, a value (a year, a publisher name, ...) and how many works have it. */
+export type Aggregations = Record<AggregationField, Record<string, number>>;
+
 export interface SearchPage {
   totalHits: number;
   offset: number;
@@ -49,15 +61,30 @@ export class CoreApi {
   }
 
   /**
-   * Counts every work matching `query` per publication year, computed by CORE
-   * across the full result set rather than the page that happens to be loaded.
+   * Counts every work matching `query` by year, document type, publisher and
+   * author. CORE computes this across the full result set, not the page that
+   * happens to be loaded, and answers all four fields in a single request.
+   * Years come back complete; the other fields as CORE's 100 largest values.
    */
-  aggregateYears(query: string): Observable<Record<string, number>> {
+  aggregate(query: string): Observable<Aggregations> {
     return this.http
       .post<CoreAggregationResponse>(`${this.baseUrl}/search/works/aggregate`, {
         q: query,
-        aggregations: ['yearPublished'],
+        aggregations: AGGREGATION_FIELDS,
       })
-      .pipe(map((res) => res.aggregations?.yearPublished ?? {}));
+      .pipe(
+        map((res) => {
+          const counts = (field: AggregationField): Record<string, number> => {
+            const value = res.aggregations?.[field];
+            return value && !Array.isArray(value) ? value : {};
+          };
+          return {
+            yearPublished: counts('yearPublished'),
+            documentType: counts('documentType'),
+            publisher: counts('publisher'),
+            authors: counts('authors'),
+          };
+        }),
+      );
   }
 }

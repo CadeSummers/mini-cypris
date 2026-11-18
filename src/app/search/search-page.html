@@ -7,9 +7,10 @@
   />
 </section>
 
-<app-year-chart
+<app-chart-panel
   class="chart"
-  [series]="store.chart()?.series ?? null"
+  [yearSeries]="store.chart()?.series ?? null"
+  [breakdowns]="store.breakdowns()"
   [source]="store.chart()?.source ?? 'all'"
   [loading]="store.chartLoading()"
   [selectedYear]="store.request()?.year ?? null"

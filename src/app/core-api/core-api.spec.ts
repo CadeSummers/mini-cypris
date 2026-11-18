@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { CoreApi, SearchPage } from './core-api';
+import { Aggregations, CoreApi, SearchPage } from './core-api';
 
 const SEARCH_URL = '/core-api/v3/search/works/';
 
@@ -43,25 +43,38 @@ describe('CoreApi', () => {
     req.flush({ totalHits: 0, limit: 100, offset: 0, results: null });
   });
 
-  it('asks CORE to aggregate every match by year', () => {
-    let counts: Record<string, number> | undefined;
-    api.aggregateYears('(drone AND delivery)').subscribe((c) => (counts = c));
+  it('asks CORE to aggregate every match by all four fields in one request', () => {
+    let result: Aggregations | undefined;
+    api.aggregate('(drone AND delivery)').subscribe((a) => (result = a));
 
     const req = http.expectOne('/core-api/v3/search/works/aggregate');
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({
       q: '(drone AND delivery)',
-      aggregations: ['yearPublished'],
+      aggregations: ['yearPublished', 'documentType', 'publisher', 'authors'],
     });
 
-    req.flush({ aggregations: { yearPublished: { '2024': 7805, '2025': 7828 } } });
-    expect(counts).toEqual({ '2024': 7805, '2025': 7828 });
+    req.flush({
+      aggregations: {
+        yearPublished: { '2024': 7805, '2025': 7828 },
+        documentType: { thesis: 8737 },
+        publisher: { IEEE: 1622 },
+        authors: { 'Poirier, Nicolas': 279 },
+      },
+    });
+    expect(result).toEqual({
+      yearPublished: { '2024': 7805, '2025': 7828 },
+      documentType: { thesis: 8737 },
+      publisher: { IEEE: 1622 },
+      authors: { 'Poirier, Nicolas': 279 },
+    });
   });
 
-  it('treats a missing aggregation as empty', () => {
-    let counts: Record<string, number> | undefined;
-    api.aggregateYears('drone').subscribe((c) => (counts = c));
-    http.expectOne('/core-api/v3/search/works/aggregate').flush({});
-    expect(counts).toEqual({});
+  it('treats a missing or empty-array aggregation as empty', () => {
+    let result: Aggregations | undefined;
+    api.aggregate('drone').subscribe((a) => (result = a));
+    // CORE sends [] rather than {} for a field with no values.
+    http.expectOne('/core-api/v3/search/works/aggregate').flush({ aggregations: { authors: [] } });
+    expect(result).toEqual({ yearPublished: {}, documentType: {}, publisher: {}, authors: {} });
   });
 });
