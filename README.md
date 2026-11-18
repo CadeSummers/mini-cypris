@@ -107,9 +107,10 @@ Mapped to the steps in the project brief:
 3. **Query validation before sending.** Unbalanced parentheses, unclosed quotes and dangling
    operators are caught in the browser with a specific message, and lowercase `and`/`or`/`not`
    gets a hint, since CORE treats those as ordinary words.
-4. **Year drill-down.** Click a bar (or a year in the chart's table view) to list only that
-   year's papers. The chart keeps showing the whole query so the context is not lost.
-5. **Shareable URLs.** The search lives in the URL (`?q=…&limit=…&year=…`), so a search can be
+4. **Year and document type drill-down.** Click a year's bar (or a year in the chart's table
+   view), or a type's name in the "Document type" view, to list only those papers. The two
+   combine. The chart keeps showing the whole query so the context is not lost.
+5. **Shareable URLs.** The search lives in the URL (`?q=…&limit=…&year=…&type=…`), so a search can be
    bookmarked or sent to someone, and back/forward work.
 6. **Load more.** Fetches the next page and appends it, skipping duplicates.
 7. **Rate-limit awareness.** CORE's limits are tight, so repeated searches are served from an
@@ -137,11 +138,11 @@ Mapped to the steps in the project brief:
 14. **Highlighted matches.** Query words are marked in each title and abstract, for both the
     CORE search and the refine box. Terms under `NOT` are left unmarked, and `title:` terms
     are marked in titles only.
-15. **Tests.** 106 unit tests covering the API service, data cleaning, the boolean parser and
+15. **Tests.** 110 unit tests covering the API service, data cleaning, the boolean parser and
     matcher, the search store (cancellation, caching, paging, fallback), chart data and URL
     handling.
-16. **End-to-end tests.** 18 Playwright tests drive the app in a real browser against a
-    mocked CORE: search, the number of papers, invalid syntax, year drill-down, refine, load
+16. **End-to-end tests.** 20 Playwright tests drive the app in a real browser against a
+    mocked CORE: search, the number of papers, invalid syntax, year and document type drill-down, refine, load
     more, both rate-limit messages, shareable URLs, the chart switcher and its fallback, plus
     two automated accessibility scans. They run in CI on every push.
 17. **Worker tests.** 12 tests run the real Worker in Cloudflare's runtime locally (Miniflare)
@@ -176,8 +177,9 @@ e2e-worker/     browser tests of the built app and the Worker together, and thei
 - The in-browser refine filter matches by substring and only sees the loaded papers; it is a
   convenience on top of CORE's search, not a replacement for it.
 - CORE pages by offset only up to 10,000 results; "Load more" stops there.
-- Only the year chart drills down. CORE's publisher and author filters do not match the
-  charted counts exactly, so those bars are not clickable.
+- Publisher and author bars are not clickable. CORE's filters for those fields do not match
+  the charted counts exactly, so a click would list a different number of papers than the
+  bar shows.
 - The end-to-end tests use a mocked CORE, so they would not notice CORE changing its
   response format. Clicking a bar on the chart canvas is checked by hand; the tests use the
   chart's table view for the same action.

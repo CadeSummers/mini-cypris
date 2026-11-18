@@ -5,7 +5,7 @@
       <p class="caption">
         @if (source() === 'all') {
           The {{ items().length }} most common {{ noun() }} across every matching paper, counted by
-          CORE.
+          CORE. {{ selectable() ? hint() : '' }}
         } @else {
           Only among the loaded papers — CORE's full totals are unavailable right now.
         }
@@ -17,9 +17,25 @@
     <ol class="bars">
       @for (item of items(); track item.label) {
         <li>
-          <span class="label">{{ item.label }}</span>
+          @if (selectable() && item.value; as value) {
+            <button
+              type="button"
+              class="label pick"
+              [attr.aria-pressed]="value === selected()"
+              [attr.aria-label]="pickLabel() + ' ' + item.label"
+              (click)="pick(value)"
+            >
+              {{ item.label }}
+            </button>
+          } @else {
+            <span class="label">{{ item.label }}</span>
+          }
           <span class="track" aria-hidden="true">
-            <span class="bar" [style.width.%]="width(item.count)"></span>
+            <span
+              class="bar"
+              [class.faded]="selected() !== null && item.value !== selected()"
+              [style.width.%]="width(item.count)"
+            ></span>
           </span>
           <span class="count"
             >{{ item.count | number }}<span class="visually-hidden"> papers</span></span

@@ -2,6 +2,7 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, linkedSignal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
+import { cleanCategoryLabel } from '../chart/category-series';
 import { ChartPanel } from '../chart/chart-panel';
 import { parseQuery } from './boolean-query';
 import { PaperCard } from './paper-card';
@@ -10,16 +11,21 @@ import { filterPapers } from './paper-matcher';
 import { DEFAULT_LIMIT, SearchBar, clampLimit } from './search-bar';
 import { SearchRequest, SearchStore } from './search-store';
 
-/** Reads a search out of the URL (?q=…&limit=…&year=…); null when there is no query. */
+/** A document type from the URL is put inside a quoted filter, so keep it to plain words. */
+const SAFE_TYPE = /^[\w -]{1,40}$/;
+
+/** Reads a search out of the URL (?q=…&limit=…&year=…&type=…); null when there is no query. */
 export function requestFromParams(params: ParamMap): SearchRequest | null {
   const query = (params.get('q') ?? '').trim();
   if (!query) return null;
 
   const year = params.get('year') ?? '';
+  const type = (params.get('type') ?? '').trim();
   return {
     query,
     limit: clampLimit(params.get('limit')),
     year: /^\d{4}$/.test(year) ? Number(year) : null,
+    documentType: SAFE_TYPE.test(type) ? type : null,
   };
 }
 
@@ -29,6 +35,7 @@ export function paramsFromRequest(request: SearchRequest): Record<string, string
     q: request.query,
     limit: request.limit === DEFAULT_LIMIT ? null : request.limit,
     year: request.year ?? null,
+    type: request.documentType ?? null,
   };
 }
 
@@ -72,6 +79,12 @@ export class SearchPage {
   /** True when a valid filter is narrowing the list. */
   protected readonly refining = computed(() => this.refine()?.ok === true);
 
+  /** The selected document type as the chart labels it ("thesis" is shown as "Thesis"). */
+  protected readonly typeLabel = computed(() => {
+    const type = this.store.request()?.documentType;
+    return type ? cleanCategoryLabel(type, 'documentType') || type : null;
+  });
+
   /** Words to mark on the cards: from the CORE query and, if valid, the refine box. */
   protected readonly highlight = computed(() => {
     const query = this.store.request()?.query;
@@ -102,16 +115,25 @@ export class SearchPage {
   }
 
   protected onSearch(request: SearchRequest): void {
-    // A year drill-down belongs to its query: keep it when only the number of
-    // papers changes, drop it when the query itself changes.
+    // Chart drill-downs belong to their query: keep them when only the number
+    // of papers changes, drop them when the query itself changes.
     const current = this.store.request();
-    const year = current && current.query === request.query ? current.year : null;
-    this.navigate({ ...request, year });
+    const same = current && current.query === request.query;
+    this.navigate({
+      ...request,
+      year: same ? current.year : null,
+      documentType: same ? current.documentType : null,
+    });
   }
 
   protected onYearSelected(year: number | null): void {
     const current = this.store.request();
     if (current) this.navigate({ ...current, year });
+  }
+
+  protected onTypeSelected(documentType: string | null): void {
+    const current = this.store.request();
+    if (current) this.navigate({ ...current, documentType });
   }
 
   protected onRefineInput(event: Event): void {

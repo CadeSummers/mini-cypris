@@ -611,11 +611,11 @@ counted by CORE over every matching paper.
 
 **Trade-offs, stated plainly.**
 
-- **Only the year chart drills down.** I tested using the other values as filters:
+- **Publisher and author bars are read-only.** I tested using the values as filters:
   `documentType:"thesis"` returned exactly the charted count, but `publisher:"IEEE"` returned
   3,395 papers against a bar of 1,622 (CORE matches the word, not the exact name) and an
   author filter returned none. A click that lists a different number of papers than the bar
-  shows would be worse than no click, so those bars are read-only.
+  shows would be worse than no click. Document types can be picked; see section 9b.
 - **CORE returns its 100 largest values per field,** so the lists are a top ten, with no
   "other" total, and merging after cleaning can only combine values within that 100.
 - **The chosen view is not in the URL.** It is a way of looking at the data, not part of the
@@ -634,6 +634,62 @@ counted by CORE over every matching paper.
 - _Showing all four charts at once_: no switching, but pushes the results far down the page.
 
 ---
+
+### 9b. Drill-down from the document type chart
+
+_Brief step 6 (the chart), step 8 (additions)._
+
+**Decision.** In the "Document type" view, each type's name is a button. Clicking "Thesis"
+lists only the theses that match the query. The choice is shown as a removable chip, lives
+in the URL (`type=thesis`), and combines with a year chosen from the year chart.
+
+**Why.**
+
+- **It is the one extra field where the click is honest.** For this field CORE's filter
+  returns exactly the number on the bar. I checked it again in the finished app against the
+  real CORE: the "Research article" bar said 8,976, and the list it opened said "10 of
+  8,976".
+- **It follows the year drill-down exactly,** so there is one idea to learn: the selection
+  narrows the list, the chart keeps showing the whole query for context, the counts are not
+  fetched again, and clicking the selection again (or its chip) removes it.
+- **The filter is added to the query, not applied in the browser:**
+  `(query) AND documentType:"thesis"`. A browser-side filter would only see the papers
+  already loaded.
+- **Year and type combine with AND.** They are independent questions ("which year?", "what
+  kind?"), and one list answering both is more useful than making the second choice cancel
+  the first.
+- **The bar keeps CORE's exact value beside the tidied label.** The chart shows "Thesis"; CORE
+  stores "thesis". `CategoryItem` now carries both, and the filter uses CORE's spelling.
+
+**Guard rails.**
+
+- **A bar made by merging several raw values cannot be picked** (its `value` is null),
+  because no single filter would return its total.
+- **Types cannot be picked in the fallback** (when CORE's counts failed and the chart shows
+  only the loaded papers). The bar's number would not be the number of papers listed.
+- **The type in the URL is checked before use.** It is placed inside a quoted filter, so only
+  letters, digits, spaces, hyphens and underscores are accepted. A hand-edited link cannot
+  add its own clause to the query.
+
+**Trade-offs, stated plainly.**
+
+- **With both a year and a type selected, neither chart shows the combined count.** Each
+  chart still describes the whole query. The combined total is in the status line above the
+  list.
+- **The type's name is the button, not the bar.** A name is a clear, focusable target with
+  text for a screen reader; the bar is decoration. The price is that clicking the bar itself
+  does nothing.
+- **`SearchRequest` now has two optional filters.** A third would justify replacing them with
+  a list of filters; two did not.
+
+**Alternatives.**
+
+- _Making publisher and author clickable too_: rejected in 9a, because the lists would not
+  match the bars.
+- _Replacing the year selection when a type is chosen_: simpler state, but it throws away a
+  choice the user made.
+- _Filtering the loaded papers in the browser_: instant and free, but wrong whenever the
+  query has more matches than are loaded.
 
 ## 10. URL state, load more
 
@@ -687,7 +743,7 @@ error mapping and URL parsing. Prettier for formatting. Every commit builds and 
 _Brief step 7 ("working" at each stage), steps 3 to 6 (each feature has a test), step 8
 (additions)._
 
-**Decision.** 18 Playwright tests in `e2e/` drive the app in a real Chromium browser. CORE is
+**Decision.** 20 Playwright tests in `e2e/` drive the app in a real Chromium browser. CORE is
 replaced at the network boundary: `e2e/mock-core.ts` answers the two endpoints the app
 calls with made-up data, records every request, and fails the test if the app calls anything
 else under `/core-api/`. They run with `npm run e2e` and as a second job in CI.
@@ -702,7 +758,7 @@ else under `/core-api/`. They run with `npm run e2e` and as a second job in CI.
   (step 6) are each a named test.
 - **The mock sits at the network, not inside Angular.** The real `HttpClient`, router, store
   and components all run. The only thing replaced is CORE itself.
-- **Not the real CORE.** Real requests would spend the rate limit (18 tests make about 50
+- **Not the real CORE.** Real requests would spend the rate limit (20 tests make about 55
   requests; the key allows about 10 a minute), need the key in CI, and fail whenever CORE is
   slow. They would also make it impossible to test a 429 or a 503 on demand.
 - **The tests assert on requests, not only on the screen.** "Refining does not ask CORE
@@ -716,7 +772,7 @@ else under `/core-api/`. They run with `npm run e2e` and as a second job in CI.
 
 **What the tests found.** The first run of the accessibility scan failed: the page had no
 level-one heading, because "Mini-Cypris" in the header was a plain `<span>`. It is now an
-`<h1>`. The 106 unit tests could not have caught this.
+`<h1>`. The unit tests could not have caught this.
 
 **I also checked that the tests can fail.** I changed the API client to always send
 `limit=10`; the "papers to fetch" test failed as it should, and I reverted the change.
@@ -751,8 +807,8 @@ level-one heading, because "Mini-Cypris" in the header was a plain `<span>`. It 
 
 1. A global budget in the Worker on top of the per-visitor limit, so the app can queue or
    warn before CORE's own limit is hit.
-2. Drill-down from the document type chart, the one extra dimension where CORE's filter
-   matched the charted count exactly.
+2. Exact publisher and author drill-down, if CORE exposes identifiers to filter on instead
+   of names.
 3. Saved searches and export of results (CSV / BibTeX).
 4. A scheduled check of the deployed site (one real search a day), to notice if CORE changes
    its response format.

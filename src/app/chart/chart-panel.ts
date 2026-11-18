@@ -19,6 +19,12 @@ interface RankedText {
   caveat: string;
 }
 
+/**
+ * Only document types can be picked. CORE's filter on this field returns
+ * exactly the number the bar shows; its publisher and author filters do not.
+ */
+const TYPE_HINT = 'Click a type to list its papers.';
+
 const VIEWS: ViewOption[] = [
   { view: 'year', tab: 'Year' },
   { view: 'documentType', tab: 'Document type' },
@@ -63,8 +69,12 @@ export class ChartPanel {
   readonly source = input<ChartSource>('all');
   readonly loading = input(false);
   readonly selectedYear = input<number | null>(null);
+  readonly selectedType = input<string | null>(null);
 
   readonly yearSelected = output<number | null>();
+  readonly typeSelected = output<string | null>();
+
+  protected readonly typeHint = TYPE_HINT;
 
   protected readonly views = VIEWS;
   protected readonly view = signal<ChartView>('year');
@@ -74,6 +84,10 @@ export class ChartPanel {
     const view = this.view();
     return view === 'year' ? null : view;
   });
+  /** Picking needs CORE's own counts: the fallback counts are of loaded papers only. */
+  protected readonly canPickType = computed(
+    () => this.dimension() === 'documentType' && this.source() === 'all',
+  );
   protected readonly rankedText = computed(() => {
     const dimension = this.dimension();
     return dimension ? RANKED_TEXT[dimension] : null;

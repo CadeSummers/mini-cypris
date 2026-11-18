@@ -80,6 +80,67 @@ test('the chart can rank publishers, document types and authors', async ({ page 
   await expect(yearChart(page)).toBeVisible();
 });
 
+test('choosing a document type lists that type, and combines with a year', async ({
+  page,
+  core,
+}) => {
+  core.onSearch((call) => {
+    const typed = call.q.includes('documentType:"thesis"');
+    const dated = call.q.includes('yearPublished:2023');
+    return { body: searchResponse(call.limit, call.offset, typed && dated ? 2 : typed ? 4 : 1234) };
+  });
+  await runSearch(page);
+  const switcher = page.getByRole('group', { name: 'Chart the matching papers by' });
+  const thesis = page.getByRole('button', { name: 'List papers of type Thesis' });
+
+  await switcher.getByRole('button', { name: 'Document type' }).click();
+  await thesis.click();
+
+  await expect(cards(page)).toHaveCount(4);
+  await expect(thesis).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('status')).toContainText('of type Thesis');
+  await expect(page).toHaveURL(/type=thesis/);
+  expect(core.searches.at(-1)?.q).toBe(`(${QUERY}) AND documentType:"thesis"`);
+  expect(core.aggregates).toHaveLength(1);
+
+  // A year chosen afterwards narrows the same list further.
+  await switcher.getByRole('button', { name: 'Year' }).click();
+  await yearChart(page).getByText('View as table').click();
+  await page.getByRole('button', { name: 'List papers from 2023' }).click();
+  await expect(cards(page)).toHaveCount(2);
+  expect(core.searches.at(-1)?.q).toBe(
+    `(${QUERY}) AND yearPublished:2023 AND documentType:"thesis"`,
+  );
+
+  // Removing the type keeps the year.
+  await page.getByRole('button', { name: /Type: Thesis/ }).click();
+  await expect(cards(page)).toHaveCount(10);
+  expect(core.searches.at(-1)?.q).toBe(`(${QUERY}) AND yearPublished:2023`);
+  await expect(page).not.toHaveURL(/type=/);
+  await expect(page).toHaveURL(/year=2023/);
+});
+
+test('publishers and authors cannot be picked, and nor can types in the fallback', async ({
+  page,
+  core,
+}) => {
+  await runSearch(page);
+  const switcher = page.getByRole('group', { name: 'Chart the matching papers by' });
+  const ranked = page.locator('app-ranked-chart');
+
+  await switcher.getByRole('button', { name: 'Publisher' }).click();
+  await expect(ranked.getByRole('listitem').first()).toBeVisible();
+  await expect(ranked.getByRole('button')).toHaveCount(0);
+
+  core.onAggregate(() => ({ status: 500, body: {} }));
+  await page.getByLabel('Boolean search').fill('another query');
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
+  await expect(cards(page)).toHaveCount(10);
+  await switcher.getByRole('button', { name: 'Document type' }).click();
+  await expect(ranked.getByRole('listitem').first()).toBeVisible();
+  await expect(ranked.getByRole('button')).toHaveCount(0);
+});
+
 test('if the counts fail, the papers still load and the chart says what it shows', async ({
   page,
   core,

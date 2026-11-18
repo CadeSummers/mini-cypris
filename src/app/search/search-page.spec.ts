@@ -3,11 +3,17 @@ import { paramsFromRequest, requestFromParams } from './search-page';
 
 describe('search URL state', () => {
   it('reads a full search from the URL', () => {
-    const params = convertToParamMap({ q: ' (drone AND delivery) ', limit: '25', year: '2021' });
+    const params = convertToParamMap({
+      q: ' (drone AND delivery) ',
+      limit: '25',
+      year: '2021',
+      type: 'thesis',
+    });
     expect(requestFromParams(params)).toEqual({
       query: '(drone AND delivery)',
       limit: 25,
       year: 2021,
+      documentType: 'thesis',
     });
   });
 
@@ -16,10 +22,16 @@ describe('search URL state', () => {
       query: 'drone',
       limit: 10,
       year: null,
+      documentType: null,
     });
     expect(
       requestFromParams(convertToParamMap({ q: 'drone', limit: '9999', year: 'soon' })),
-    ).toEqual({ query: 'drone', limit: 100, year: null });
+    ).toEqual({ query: 'drone', limit: 100, year: null, documentType: null });
+  });
+
+  it('ignores a document type that could break out of its quoted filter', () => {
+    const type = 'thesis" OR documentType:"research';
+    expect(requestFromParams(convertToParamMap({ q: 'drone', type }))?.documentType).toBeNull();
   });
 
   it('treats a missing or blank query as no search', () => {
@@ -32,9 +44,10 @@ describe('search URL state', () => {
       q: 'drone',
       limit: null,
       year: null,
+      type: null,
     });
 
-    const request = { query: 'a OR b', limit: 50, year: 2019 };
+    const request = { query: 'a OR b', limit: 50, year: 2019, documentType: 'research article' };
     const params = convertToParamMap(
       Object.fromEntries(Object.entries(paramsFromRequest(request)).map(([k, v]) => [k, `${v}`])),
     );

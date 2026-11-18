@@ -29,5 +29,10 @@
     [series]="rankedSeries()"
     [source]="source()"
     [loading]="loading()"
+    [selectable]="canPickType()"
+    [selected]="dimension() === 'documentType' ? selectedType() : null"
+    [hint]="typeHint"
+    pickLabel="List papers of type"
+    (itemSelected)="typeSelected.emit($event)"
   />
 }

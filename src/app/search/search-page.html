@@ -14,7 +14,9 @@
   [source]="store.chart()?.source ?? 'all'"
   [loading]="store.chartLoading()"
   [selectedYear]="store.request()?.year ?? null"
+  [selectedType]="store.request()?.documentType ?? null"
   (yearSelected)="onYearSelected($event)"
+  (typeSelected)="onTypeSelected($event)"
 />
 
 <section class="results" aria-label="Search results" [attr.aria-busy]="store.loading()">
@@ -36,19 +38,31 @@
             @if (store.request()?.year; as year) {
               published in <strong>{{ year }}</strong>
             }
+            @if (typeLabel(); as type) {
+              of type <strong>{{ type }}</strong>
+            }
           </p>
         }
       }
     }
   </div>
 
-  @if (store.request()?.year; as year) {
+  @if (store.request()?.year || typeLabel()) {
     <p class="filters">
-      <button type="button" class="filter-chip" (click)="onYearSelected(null)">
-        Year: {{ year }}
-        <span aria-hidden="true">×</span>
-        <span class="visually-hidden">Remove year filter</span>
-      </button>
+      @if (store.request()?.year; as year) {
+        <button type="button" class="filter-chip" (click)="onYearSelected(null)">
+          Year: {{ year }}
+          <span aria-hidden="true">×</span>
+          <span class="visually-hidden">Remove year filter</span>
+        </button>
+      }
+      @if (typeLabel(); as type) {
+        <button type="button" class="filter-chip" (click)="onTypeSelected(null)">
+          Type: {{ type }}
+          <span aria-hidden="true">×</span>
+          <span class="visually-hidden">Remove document type filter</span>
+        </button>
+      }
     </p>
   }
 
@@ -156,6 +170,9 @@
             Nothing in CORE matches <strong>{{ store.request()?.query }}</strong>
             @if (store.request()?.year; as year) {
               in {{ year }}
+            }
+            @if (typeLabel(); as type) {
+              of type {{ type }}
             }
             . Try fewer AND terms, add alternatives with OR, or check spelling.
           </p>

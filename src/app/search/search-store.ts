@@ -19,6 +19,8 @@ export interface SearchRequest {
   limit: number;
   /** Optional drill-down to one publication year, chosen from the chart. */
   year?: number | null;
+  /** Optional drill-down to one document type, as CORE spells it (e.g. "thesis"). */
+  documentType?: string | null;
 }
 
 export type SearchStatus = 'idle' | 'loading' | 'loaded' | 'error';
@@ -44,9 +46,12 @@ const CACHE_SIZE = 20;
 /** CORE does not page beyond this many results without its scroll API. */
 const MAX_OFFSET = 10_000;
 
-/** The query actually sent to CORE: the user's query, narrowed to a year if one is selected. */
+/** The query actually sent to CORE: the user's query, narrowed by any chart selections. */
 export function toCoreQuery(request: SearchRequest): string {
-  return request.year ? `(${request.query}) AND yearPublished:${request.year}` : request.query;
+  const filters: string[] = [];
+  if (request.year) filters.push(`yearPublished:${request.year}`);
+  if (request.documentType) filters.push(`documentType:"${request.documentType}"`);
+  return filters.length ? [`(${request.query})`, ...filters].join(' AND ') : request.query;
 }
 
 /**
@@ -220,7 +225,12 @@ export class SearchStore {
   search(request: SearchRequest): void {
     const query = request.query.trim();
     if (!query) return;
-    this.requests.next({ query, limit: request.limit, year: request.year ?? null });
+    this.requests.next({
+      query,
+      limit: request.limit,
+      year: request.year ?? null,
+      documentType: request.documentType ?? null,
+    });
     this.aggregate(query);
   }
 
@@ -250,7 +260,7 @@ export class SearchStore {
 
   /**
    * The aggregate depends only on the base query, so changing the limit or
-   * drilling into a year does not refetch it: the chart keeps showing the
+   * drilling into a year or document type does not refetch it: the chart keeps showing the
    * whole picture while the list narrows.
    */
   private aggregate(query: string): void {
@@ -260,7 +270,7 @@ export class SearchStore {
   }
 
   private load(request: SearchRequest) {
-    const key = `${request.limit}|${request.year ?? ''}|${request.query}`;
+    const key = `${request.limit}|${request.year ?? ''}|${request.documentType ?? ''}|${request.query}`;
     const cached = this.cache.get(key);
     if (cached) return of<Outcome>({ ok: true, page: cached });
 

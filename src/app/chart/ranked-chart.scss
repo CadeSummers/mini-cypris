@@ -41,6 +41,24 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.pick {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &[aria-pressed='true'] {
+    font-weight: 700;
+  }
+}
+
 .track {
   height: 0.9rem;
   border-radius: 4px;
@@ -52,6 +70,10 @@ h2 {
   height: 100%;
   border-radius: 4px;
   background: var(--accent);
+
+  &.faded {
+    opacity: 0.35;
+  }
 }
 
 .count {

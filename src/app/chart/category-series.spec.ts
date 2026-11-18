@@ -23,9 +23,9 @@ describe('buildCategorySeries', () => {
     const series = buildCategorySeries({ a: 1, b: 5, c: 3, d: 4 }, 'publisher', 3);
 
     expect(series.items).toEqual([
-      { label: 'b', count: 5 },
-      { label: 'd', count: 4 },
-      { label: 'c', count: 3 },
+      { label: 'b', count: 5, value: 'b' },
+      { label: 'd', count: 4, value: 'd' },
+      { label: 'c', count: 3, value: 'c' },
     ]);
     expect(series.distinct).toBe(4);
   });
@@ -36,7 +36,17 @@ describe('buildCategorySeries', () => {
       'authors',
     );
 
-    expect(series.items).toEqual([{ label: 'K Anderson', count: 121 }]);
+    // Three raw values were merged, so no single CORE filter would match the bar.
+    expect(series.items).toEqual([{ label: 'K Anderson', count: 121, value: null }]);
+  });
+
+  it("keeps CORE's exact value beside the tidied label, for filtering", () => {
+    const series = buildCategorySeries({ thesis: 30, ' Research ': 10 }, 'documentType');
+
+    expect(series.items).toEqual([
+      { label: 'Thesis', count: 30, value: 'thesis' },
+      { label: 'Research', count: 10, value: ' Research ' },
+    ]);
   });
 
   it('does not guess that different spellings are the same publisher', () => {

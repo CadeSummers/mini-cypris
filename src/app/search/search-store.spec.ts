@@ -20,6 +20,15 @@ describe('toCoreQuery', () => {
       '(a OR b) AND yearPublished:2021',
     );
   });
+
+  it('narrows it to a document type, alone or together with a year', () => {
+    expect(toCoreQuery({ query: 'a OR b', limit: 10, documentType: 'thesis' })).toBe(
+      '(a OR b) AND documentType:"thesis"',
+    );
+    expect(toCoreQuery({ query: 'a OR b', limit: 10, year: 2021, documentType: 'thesis' })).toBe(
+      '(a OR b) AND yearPublished:2021 AND documentType:"thesis"',
+    );
+  });
 });
 
 describe('SearchStore', () => {
@@ -49,7 +58,12 @@ describe('SearchStore', () => {
   it('loads papers for a query', () => {
     store.search({ query: ' drone ', limit: 10 });
     expect(store.status()).toBe('loading');
-    expect(store.request()).toEqual({ query: 'drone', limit: 10, year: null });
+    expect(store.request()).toEqual({
+      query: 'drone',
+      limit: 10,
+      year: null,
+      documentType: null,
+    });
 
     http.expectOne(isSearch).flush(page([1, 2]));
 
@@ -107,6 +121,21 @@ describe('SearchStore', () => {
     http.expectOne(isSearch).flush(page([1]));
   });
 
+  it('treats the same query with a different document type as a different search', () => {
+    store.search({ query: 'drone', limit: 10 });
+    http.expectOne(isSearch).flush(page([1, 2], 2));
+    http.expectOne(isAggregate).flush({ aggregations: {} });
+
+    store.search({ query: 'drone', limit: 10, documentType: 'thesis' });
+    const req = http.expectOne(isSearch);
+    expect(req.request.params.get('q')).toBe('(drone) AND documentType:"thesis"');
+    req.flush(page([2], 1));
+
+    expect(store.papers().map((paper) => paper.id)).toEqual(['2']);
+    // The counts belong to the base query, so the chart is not fetched again.
+    http.expectNone(isAggregate);
+  });
+
   it('narrows the search to a year without touching the base query', () => {
     store.search({ query: 'drone OR uav', limit: 10, year: 2021 });
 
@@ -114,7 +143,12 @@ describe('SearchStore', () => {
     expect(req.request.params.get('q')).toBe('(drone OR uav) AND yearPublished:2021');
     req.flush(page([1]));
 
-    expect(store.request()).toEqual({ query: 'drone OR uav', limit: 10, year: 2021 });
+    expect(store.request()).toEqual({
+      query: 'drone OR uav',
+      limit: 10,
+      year: 2021,
+      documentType: null,
+    });
   });
 
   it('returns to idle on reset and drops a late response', () => {
@@ -227,11 +261,13 @@ describe('SearchStore', () => {
 
       const breakdowns = store.breakdowns();
       expect(breakdowns?.documentType.items).toEqual([
-        { label: 'Thesis', count: 30 },
-        { label: 'Research article', count: 10 },
+        { label: 'Thesis', count: 30, value: 'thesis' },
+        { label: 'Research article', count: 10, value: 'research article' },
       ]);
-      expect(breakdowns?.publisher.items).toEqual([{ label: 'IEEE', count: 25 }]);
-      expect(breakdowns?.authors.items).toEqual([{ label: 'K Anderson', count: 4 }]);
+      expect(breakdowns?.publisher.items).toEqual([{ label: 'IEEE', count: 25, value: 'IEEE' }]);
+      expect(breakdowns?.authors.items).toEqual([
+        { label: 'K Anderson', count: 4, value: 'K Anderson (7837271)' },
+      ]);
     });
 
     it('ranks the loaded papers when the aggregate fails', () => {
@@ -247,10 +283,12 @@ describe('SearchStore', () => {
       });
       http.expectOne(isAggregate).flush('boom', { status: 500, statusText: 'Server Error' });
 
-      expect(store.breakdowns()?.publisher.items).toEqual([{ label: 'IEEE', count: 2 }]);
+      expect(store.breakdowns()?.publisher.items).toEqual([
+        { label: 'IEEE', count: 2, value: 'IEEE' },
+      ]);
       expect(store.breakdowns()?.authors.items).toEqual([
-        { label: 'A', count: 2 },
-        { label: 'B', count: 1 },
+        { label: 'A', count: 2, value: 'A' },
+        { label: 'B', count: 1, value: 'B' },
       ]);
       expect(store.breakdowns()?.documentType.items).toEqual([]);
     });

@@ -7,6 +7,11 @@ export type Dimension = (typeof DIMENSIONS)[number];
 export interface CategoryItem {
   label: string;
   count: number;
+  /**
+   * The exact value CORE holds, usable as a filter. Null when several raw
+   * values were merged into this item, because no single filter matches them all.
+   */
+  value: string | null;
 }
 
 export interface CategorySeries {
@@ -63,8 +68,9 @@ export function buildCategorySeries(
     const existing = merged.get(key);
     if (existing) {
       existing.count += count;
+      existing.value = null;
     } else {
-      merged.set(key, { label, count });
+      merged.set(key, { label, count, value: raw });
     }
   }
 
