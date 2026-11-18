@@ -4,6 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { SearchStore } from './search-store';
 
 const isSearch = (r: { url: string }) => r.url === '/core-api/v3/search/works/';
+const isAggregate = (r: { url: string }) => r.url === '/core-api/v3/search/works/aggregate';
 
 describe('SearchStore', () => {
   let store: SearchStore;
@@ -17,7 +18,11 @@ describe('SearchStore', () => {
     http = TestBed.inject(HttpTestingController);
   });
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    // Tests that are not about the chart leave its request pending.
+    http.match(isAggregate);
+    http.verify();
+  });
 
   it('starts idle and ignores blank queries', () => {
     store.search('   ', 10);
@@ -88,5 +93,45 @@ describe('SearchStore', () => {
     // A different limit is a different result set.
     store.search('drone', 20);
     http.expectOne(isSearch).flush({ totalHits: 1, limit: 20, offset: 0, results: [{ id: 1 }] });
+  });
+
+  describe('chart data', () => {
+    const page = { totalHits: 3, limit: 10, offset: 0, results: [{ id: 1, yearPublished: 2020 }] };
+    const years = (yearPublished: Record<string, number>) => ({ aggregations: { yearPublished } });
+
+    it('uses CORE totals for every matching paper', () => {
+      expect(store.chart()).toBeNull();
+
+      store.search('drone', 10);
+      http.expectOne(isSearch).flush(page);
+      expect(store.chartLoading()).toBe(true);
+
+      http.expectOne(isAggregate).flush(years({ '2020': 40, '2021': 60 }));
+
+      expect(store.chartLoading()).toBe(false);
+      expect(store.chart()?.source).toBe('all');
+      expect(store.chart()?.series.total).toBe(100);
+    });
+
+    it('falls back to the loaded papers when the aggregate fails', () => {
+      store.search('drone', 10);
+      http.expectOne(isSearch).flush(page);
+      http.expectOne(isAggregate).flush('boom', { status: 500, statusText: 'Server Error' });
+
+      expect(store.status()).toBe('loaded');
+      expect(store.chart()?.source).toBe('loaded');
+      expect(store.chart()?.series.points).toEqual([{ year: 2020, count: 1 }]);
+    });
+
+    it('does not refetch the aggregate when only the limit changes', () => {
+      store.search('drone', 10);
+      http.expectOne(isSearch).flush(page);
+      http.expectOne(isAggregate).flush(years({ '2020': 40 }));
+
+      store.search('drone', 50);
+      http.expectOne(isSearch).flush(page);
+      http.expectNone(isAggregate);
+      expect(store.chart()?.series.total).toBe(40);
+    });
   });
 });

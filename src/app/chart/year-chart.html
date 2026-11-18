@@ -1,0 +1,72 @@
+<section class="chart-card" aria-labelledby="chart-title">
+  <header class="head">
+    <div>
+      <h2 id="chart-title">Papers per year</h2>
+      @if (hasData()) {
+        <p class="caption">
+          @if (source() === 'all') {
+            All {{ shownTotal() | number }} matching papers in this period, counted by CORE.
+          } @else {
+            Only the {{ shownTotal() | number }} loaded papers — CORE's full totals are unavailable
+            right now.
+          }
+        </p>
+      }
+    </div>
+
+    @if (canToggle()) {
+      <div class="toggle" role="group" aria-label="Year range">
+        <button type="button" [attr.aria-pressed]="!showAll()" (click)="showAll.set(false)">
+          Last {{ recentSpan }} years
+        </button>
+        <button type="button" [attr.aria-pressed]="showAll()" (click)="showAll.set(true)">
+          All years
+        </button>
+      </div>
+    }
+  </header>
+
+  <!-- The canvas stays in the DOM so Chart.js keeps one instance for the page's lifetime. -->
+  <div class="canvas-wrap" [hidden]="!hasData()">
+    <canvas #canvas role="img" [attr.aria-label]="summary()"></canvas>
+  </div>
+
+  @if (!hasData()) {
+    <p class="placeholder">
+      @if (loading()) {
+        Counting papers per year…
+      } @else if (series()) {
+        No publication years are available for these papers.
+      } @else {
+        Run a search to see how the matching papers are spread over time.
+      }
+    </p>
+  } @else {
+    @if (series()?.futureDated; as futureDated) {
+      <p class="note">
+        {{ futureDated | number }} {{ futureDated === 1 ? 'paper is' : 'papers are' }} dated after
+        {{ currentYear() }} in CORE's metadata and left out as data errors.
+      </p>
+    }
+
+    <details class="table">
+      <summary>View as table</summary>
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Year</th>
+            <th scope="col">Papers</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (point of points(); track point.year) {
+            <tr>
+              <th scope="row">{{ point.year }}</th>
+              <td>{{ point.count | number }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </details>
+  }
+</section>

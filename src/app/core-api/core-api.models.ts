@@ -22,3 +22,10 @@ export interface CoreSearchResponse {
   offset: number;
   results?: CoreWork[] | null;
 }
+
+export interface CoreAggregationResponse {
+  aggregations?: {
+    /** Year (as a string key) to number of matching works. */
+    yearPublished?: Record<string, number>;
+  } | null;
+}

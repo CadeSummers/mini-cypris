@@ -9,6 +9,12 @@ describe('cleanText', () => {
     expect(cleanText('where a < b and c > d')).toBe('where a < b and c > d');
   });
 
+  it('removes escaped tags, even when the last entity is cut off', () => {
+    expect(cleanText('&lt;p&gt;This is the first release.&lt;/p&gt')).toBe(
+      'This is the first release.',
+    );
+  });
+
   it('decodes common entities and handles empty input', () => {
     expect(cleanText('R&amp;D')).toBe('R&D');
     expect(cleanText(null)).toBe('');
@@ -50,6 +56,11 @@ describe('toPaper', () => {
       documentType: null,
       citationCount: null,
     });
+  });
+
+  it('drops an abstract that only repeats the title', () => {
+    const paper = toPaper({ id: 1, title: 'Wind-Aware Drones', abstract: 'Wind-Aware Drones</p' });
+    expect(paper.abstract).toBe('');
   });
 
   it('prefers the DOI as the landing page', () => {

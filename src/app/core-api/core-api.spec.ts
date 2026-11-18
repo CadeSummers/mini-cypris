@@ -42,4 +42,26 @@ describe('CoreApi', () => {
     expect(req.request.params.get('limit')).toBe('100');
     req.flush({ totalHits: 0, limit: 100, offset: 0, results: null });
   });
+
+  it('asks CORE to aggregate every match by year', () => {
+    let counts: Record<string, number> | undefined;
+    api.aggregateYears('(drone AND delivery)').subscribe((c) => (counts = c));
+
+    const req = http.expectOne('/core-api/v3/search/works/aggregate');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({
+      q: '(drone AND delivery)',
+      aggregations: ['yearPublished'],
+    });
+
+    req.flush({ aggregations: { yearPublished: { '2024': 7805, '2025': 7828 } } });
+    expect(counts).toEqual({ '2024': 7805, '2025': 7828 });
+  });
+
+  it('treats a missing aggregation as empty', () => {
+    let counts: Record<string, number> | undefined;
+    api.aggregateYears('drone').subscribe((c) => (counts = c));
+    http.expectOne('/core-api/v3/search/works/aggregate').flush({});
+    expect(counts).toEqual({});
+  });
 });

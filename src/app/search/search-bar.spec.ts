@@ -32,7 +32,9 @@ describe('SearchBar', () => {
   }
 
   async function submit() {
-    el().querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+    el()
+      .querySelector('form')!
+      .dispatchEvent(new Event('submit', { cancelable: true }));
     await fixture.whenStable();
   }
 

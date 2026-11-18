@@ -4,6 +4,8 @@ import { Subject, catchError, map, of, switchMap, tap } from 'rxjs';
 import { ApiError, toApiError } from '../core-api/api-error';
 import { CoreApi, SearchPage } from '../core-api/core-api';
 import { Paper } from '../core-api/paper';
+import { ChartSource } from '../chart/year-chart';
+import { YearSeries, buildYearSeries, countByYear } from '../chart/year-series';
 
 export interface SearchRequest {
   query: string;
@@ -11,6 +13,16 @@ export interface SearchRequest {
 }
 
 export type SearchStatus = 'idle' | 'loading' | 'loaded' | 'error';
+
+/** `ready` holds CORE's counts; `unavailable` means the UI should fall back to loaded papers. */
+type AggregateState =
+  | { status: 'idle' | 'loading' | 'unavailable' }
+  | { status: 'ready'; query: string; counts: Record<string, number> };
+
+export interface ChartData {
+  series: YearSeries;
+  source: ChartSource;
+}
 
 type Outcome = { ok: true; page: SearchPage } | { ok: false; error: ApiError };
 
@@ -30,12 +42,16 @@ export class SearchStore {
   private readonly requests = new Subject<SearchRequest>();
   /** Insertion-ordered, so the first key is always the oldest entry. */
   private readonly cache = new Map<string, SearchPage>();
+  private readonly aggregateRequests = new Subject<string>();
+  private readonly aggregateCache = new Map<string, Record<string, number>>();
+  private readonly currentYear = new Date().getFullYear();
 
   private readonly _request = signal<SearchRequest | null>(null);
   private readonly _status = signal<SearchStatus>('idle');
   private readonly _papers = signal<Paper[]>([]);
   private readonly _totalHits = signal(0);
   private readonly _error = signal<ApiError | null>(null);
+  private readonly _aggregate = signal<AggregateState>({ status: 'idle' });
 
   /** The request currently shown or in flight; null until the first search. */
   readonly request = this._request.asReadonly();
@@ -44,6 +60,29 @@ export class SearchStore {
   readonly totalHits = this._totalHits.asReadonly();
   readonly error = this._error.asReadonly();
   readonly loading = computed(() => this._status() === 'loading');
+
+  /**
+   * Year distribution for the chart. Prefers CORE's aggregate over every
+   * matching paper; if that request fails, falls back to counting the papers
+   * on screen and says so through `source`.
+   */
+  readonly chart = computed<ChartData | null>(() => {
+    const aggregate = this._aggregate();
+    if (aggregate.status === 'ready') {
+      return { series: buildYearSeries(aggregate.counts, this.currentYear), source: 'all' };
+    }
+    if (aggregate.status === 'unavailable' && this._status() === 'loaded') {
+      return {
+        series: buildYearSeries(countByYear(this._papers()), this.currentYear),
+        source: 'loaded',
+      };
+    }
+    return null;
+  });
+
+  readonly chartLoading = computed(
+    () => this._aggregate().status === 'loading' || (this.loading() && !this.chart()),
+  );
 
   constructor() {
     this.requests
@@ -68,18 +107,46 @@ export class SearchStore {
           this._status.set('error');
         }
       });
+
+    this.aggregateRequests
+      .pipe(
+        tap(() => this._aggregate.set({ status: 'loading' })),
+        switchMap((query) => {
+          const cached = this.aggregateCache.get(query);
+          if (cached) return of<AggregateState>({ status: 'ready', query, counts: cached });
+
+          return this.api.aggregateYears(query).pipe(
+            tap((counts) => this.aggregateCache.set(query, counts)),
+            map((counts): AggregateState => ({ status: 'ready', query, counts })),
+            // The chart is secondary: a failure here must not break the search.
+            catchError(() => of<AggregateState>({ status: 'unavailable' })),
+          );
+        }),
+        takeUntilDestroyed(),
+      )
+      .subscribe((state) => this._aggregate.set(state));
   }
 
   search(query: string, limit: number): void {
     const trimmed = query.trim();
     if (!trimmed) return;
     this.requests.next({ query: trimmed, limit });
+    this.aggregate(trimmed);
   }
 
   /** Repeats the current request, e.g. after an error. */
   retry(): void {
     const request = this._request();
-    if (request) this.requests.next(request);
+    if (!request) return;
+    this.requests.next(request);
+    this.aggregate(request.query);
+  }
+
+  /** The aggregate depends only on the query, so changing the limit does not refetch it. */
+  private aggregate(query: string): void {
+    const current = this._aggregate();
+    if (current.status === 'ready' && current.query === query) return;
+    this.aggregateRequests.next(query);
   }
 
   private load(request: SearchRequest) {

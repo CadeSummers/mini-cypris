@@ -18,22 +18,31 @@ export interface Paper {
 }
 
 const ENTITIES: Record<string, string> = {
-  '&amp;': '&',
-  '&lt;': '<',
-  '&gt;': '>',
-  '&quot;': '"',
-  '&#39;': "'",
-  '&nbsp;': ' ',
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  '#39': "'",
+  nbsp: ' ',
 };
 
-/** Strips HTML remnants (including a tag cut off at the end) and tidies whitespace. */
+/**
+ * Strips HTML remnants and tidies whitespace.
+ *
+ * Repository metadata is messy: abstracts arrive with tags, with tags that
+ * were themselves escaped (&lt;p&gt;), and cut off mid-tag or mid-entity.
+ * Entities are decoded first so escaped tags are removed along with real ones.
+ */
 export function cleanText(value: string | null | undefined): string {
   if (!value) return '';
-  return value
-    .replace(/<\/?[a-zA-Z][^>]*(>|$)/g, ' ')
-    .replace(/&(amp|lt|gt|quot|#39|nbsp);/g, (m) => ENTITIES[m])
-    .replace(/\s+/g, ' ')
-    .trim();
+  return (
+    value
+      // The semicolon is optional only at the very end, where text was truncated.
+      .replace(/&(amp|lt|gt|quot|#39|nbsp)(;|$)/g, (_, name: string) => ENTITIES[name])
+      .replace(/<\/?[a-zA-Z][^>]*(>|$)/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
 }
 
 function orNull(value: string | null | undefined): string | null {
@@ -54,11 +63,14 @@ export function parseYear(value: number | string | null | undefined): number | n
 export function toPaper(work: CoreWork): Paper {
   const id = String(work.id);
   const doi = orNull(work.doi);
+  const title = cleanText(work.title);
+  const abstract = cleanText(work.abstract);
   return {
     id,
-    title: cleanText(work.title) || 'Untitled',
+    title: title || 'Untitled',
     authors: (work.authors ?? []).map((a) => cleanAuthor(a?.name)).filter(Boolean),
-    abstract: cleanText(work.abstract),
+    // Some repositories copy the title into the abstract; that is not an abstract.
+    abstract: abstract === title ? '' : abstract,
     year: parseYear(work.yearPublished),
     doi,
     url: doi ? `https://doi.org/${doi}` : `https://core.ac.uk/works/${id}`,

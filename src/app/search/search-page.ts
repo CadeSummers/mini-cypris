@@ -1,12 +1,13 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { YearChart } from '../chart/year-chart';
 import { PaperCard } from './paper-card';
 import { DEFAULT_LIMIT, SearchBar } from './search-bar';
 import { SearchRequest, SearchStore } from './search-store';
 
 @Component({
   selector: 'app-search-page',
-  imports: [DatePipe, DecimalPipe, PaperCard, SearchBar],
+  imports: [DatePipe, DecimalPipe, PaperCard, SearchBar, YearChart],
   providers: [SearchStore],
   templateUrl: './search-page.html',
   styleUrl: './search-page.scss',

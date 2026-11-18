@@ -16,7 +16,12 @@
   @if (paper().abstract) {
     <p class="abstract" [class.clamped]="isLong() && !expanded()">{{ paper().abstract }}</p>
     @if (isLong()) {
-      <button type="button" class="link-button" [attr.aria-expanded]="expanded()" (click)="toggle()">
+      <button
+        type="button"
+        class="link-button"
+        [attr.aria-expanded]="expanded()"
+        (click)="toggle()"
+      >
         {{ expanded() ? 'Show less' : 'Show more' }}
       </button>
     }

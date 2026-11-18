@@ -7,6 +7,13 @@
   />
 </section>
 
+<app-year-chart
+  class="chart"
+  [series]="store.chart()?.series ?? null"
+  [source]="store.chart()?.source ?? 'all'"
+  [loading]="store.chartLoading()"
+/>
+
 <section class="results" aria-label="Search results" [attr.aria-busy]="store.loading()">
   <div class="status" role="status" aria-live="polite">
     @switch (store.status()) {
@@ -14,7 +21,9 @@
         <p>Enter a query above to search open-access research papers.</p>
       }
       @case ('loading') {
-        <p>Searching CORE for <strong>{{ store.request()?.query }}</strong>…</p>
+        <p>
+          Searching CORE for <strong>{{ store.request()?.query }}</strong>…
+        </p>
       }
       @case ('loaded') {
         @if (store.papers().length) {

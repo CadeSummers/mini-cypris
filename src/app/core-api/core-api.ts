@@ -1,7 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, InjectionToken, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
-import { CoreSearchResponse } from './core-api.models';
+import { CoreAggregationResponse, CoreSearchResponse } from './core-api.models';
 import { Paper, toPaper } from './paper';
 
 /**
@@ -46,5 +46,18 @@ export class CoreApi {
         papers: (res.results ?? []).map(toPaper),
       })),
     );
+  }
+
+  /**
+   * Counts every work matching `query` per publication year, computed by CORE
+   * across the full result set rather than the page that happens to be loaded.
+   */
+  aggregateYears(query: string): Observable<Record<string, number>> {
+    return this.http
+      .post<CoreAggregationResponse>(`${this.baseUrl}/search/works/aggregate`, {
+        q: query,
+        aggregations: ['yearPublished'],
+      })
+      .pipe(map((res) => res.aggregations?.yearPublished ?? {}));
   }
 }
