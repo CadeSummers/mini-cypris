@@ -12,6 +12,12 @@ query.
 Built as a take-home project for Cypris. The reasoning behind each choice, with the
 alternatives considered, is in [Design_Decisions.md](Design_Decisions.md).
 
+![Search results for a boolean query, with the papers-per-year chart above the paper cards](docs/search-desktop.png)
+
+| Year drill-down                                                                                     | Phone width                                                          |
+| --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| ![The 2021 bar selected in the chart, with the list narrowed to that year](docs/year-drilldown.png) | ![The same search at a 390-pixel-wide screen](docs/search-phone.png) |
+
 ## Run it
 
 Requires Node.js 20.19+, 22.12+ or 24+.
