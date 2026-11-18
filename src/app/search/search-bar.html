@@ -1,0 +1,41 @@
+<form class="bar" role="search" novalidate (submit)="submit($event)">
+  <div class="field query-field">
+    <label for="query">Boolean search</label>
+    <input
+      id="query"
+      type="search"
+      autocomplete="off"
+      autocapitalize="off"
+      spellcheck="false"
+      placeholder="(drone AND (package OR delivery))"
+      [value]="draft()"
+      [attr.aria-invalid]="showIssue() ? 'true' : null"
+      aria-describedby="query-feedback"
+      (input)="onInput($event)"
+    />
+  </div>
+
+  <button type="submit" class="primary" [disabled]="busy() || !draft().trim()">
+    {{ busy() ? 'Searching…' : 'Search' }}
+  </button>
+</form>
+
+<div id="query-feedback" class="feedback" aria-live="polite">
+  @if (showIssue()) {
+    <p class="issue">{{ issue()?.message }}</p>
+  } @else if (lowercaseOperator(); as word) {
+    <p class="hint">
+      Tip: operators are uppercase. “{{ word }}” is searched as an ordinary word; use
+      {{ word.toUpperCase() }} to combine terms.
+    </p>
+  }
+</div>
+
+<div class="examples">
+  <span class="examples-label">Use AND, OR, NOT, parentheses and "phrases". Try:</span>
+  @for (example of examples; track example) {
+    <button type="button" class="chip" [disabled]="busy()" (click)="useExample(example)">
+      {{ example }}
+    </button>
+  }
+</div>

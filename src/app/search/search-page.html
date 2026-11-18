@@ -1,6 +1,17 @@
+<section class="search" aria-label="Search">
+  <app-search-bar
+    [query]="store.request()?.query ?? ''"
+    [busy]="store.loading()"
+    (search)="onSearch($event)"
+  />
+</section>
+
 <section class="results" aria-label="Search results">
   <div class="status" role="status" aria-live="polite">
     @switch (store.status()) {
+      @case ('idle') {
+        <p>Enter a query above to search open-access research papers.</p>
+      }
       @case ('loading') {
         <p>Searching CORE…</p>
       }
