@@ -1,5 +1,9 @@
 # Mini-Cypris
 
+[![CI](https://github.com/CadeSummers/mini-cypris/actions/workflows/ci.yml/badge.svg)](https://github.com/CadeSummers/mini-cypris/actions/workflows/ci.yml)
+
+**Live demo:** <https://mini-cypris.cadetsummers.workers.dev>
+
 A small Angular app for searching open-access research papers through the
 [CORE API](https://api.core.ac.uk/docs/v3): boolean keyword search, a control for how many
 papers to fetch, and a chart of publications per year across **every** paper that matches the
