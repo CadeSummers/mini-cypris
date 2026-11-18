@@ -106,3 +106,37 @@
     animation: none;
   }
 }
+
+.refine {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+
+  label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
+  input {
+    height: 2.4rem;
+    padding: 0 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+    font-size: 0.9rem;
+  }
+}
+
+.refine-feedback {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+
+  .pending {
+    color: var(--warn-text);
+  }
+}

@@ -65,11 +65,51 @@
 
     @case ('loaded') {
       @if (store.papers().length) {
-        <ul class="paper-list">
-          @for (paper of store.papers(); track paper.id) {
-            <li><app-paper-card [paper]="paper" /></li>
-          }
-        </ul>
+        <div class="refine">
+          <label for="refine">Refine these {{ store.papers().length | number }} papers</label>
+          <input
+            id="refine"
+            type="search"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            placeholder="e.g. urban AND NOT military, or year>=2020"
+            [value]="refineText()"
+            [attr.aria-invalid]="refineIssue() ? 'true' : null"
+            aria-describedby="refine-feedback"
+            (input)="onRefineInput($event)"
+          />
+          <p id="refine-feedback" class="refine-feedback" aria-live="polite">
+            @if (refineIssue(); as issue) {
+              <span class="pending">{{ issue }} Showing all loaded papers meanwhile.</span>
+            } @else if (refining()) {
+              {{ visiblePapers().length | number }} of {{ store.papers().length | number }} loaded
+              papers match. This filters in your browser and does not query CORE again.
+            } @else {
+              Same boolean syntax, applied instantly to the papers already loaded. Fields: title,
+              abstract, author, publisher, year.
+            }
+          </p>
+        </div>
+
+        @if (visiblePapers().length) {
+          <ul class="paper-list">
+            @for (paper of visiblePapers(); track paper.id) {
+              <li><app-paper-card [paper]="paper" /></li>
+            }
+          </ul>
+        } @else {
+          <div class="notice">
+            <h2>No loaded papers match the filter</h2>
+            <p>
+              The filter only looks at the {{ store.papers().length | number }} papers already
+              loaded. Loosen it, or fetch more papers above.
+            </p>
+            <button type="button" class="secondary" (click)="refineText.set('')">
+              Clear filter
+            </button>
+          </div>
+        }
       } @else {
         <div class="notice">
           <h2>No papers matched</h2>
