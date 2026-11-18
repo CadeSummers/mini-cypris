@@ -5,7 +5,8 @@
       @if (hasData()) {
         <p class="caption">
           @if (source() === 'all') {
-            All {{ shownTotal() | number }} matching papers in this period, counted by CORE.
+            All {{ shownTotal() | number }} matching papers in this period, counted by CORE. Click a
+            bar to list that year's papers.
           } @else {
             Only the {{ shownTotal() | number }} loaded papers — CORE's full totals are unavailable
             right now.
@@ -60,8 +61,17 @@
         </thead>
         <tbody>
           @for (point of points(); track point.year) {
-            <tr>
-              <th scope="row">{{ point.year }}</th>
+            <tr [class.selected]="point.year === selectedYear()">
+              <th scope="row">
+                <button
+                  type="button"
+                  [attr.aria-pressed]="point.year === selectedYear()"
+                  [attr.aria-label]="'List papers from ' + point.year"
+                  (click)="select(point.year)"
+                >
+                  {{ point.year }}
+                </button>
+              </th>
               <td>{{ point.count | number }}</td>
             </tr>
           }

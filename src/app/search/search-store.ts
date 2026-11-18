@@ -1,15 +1,17 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Subject, catchError, map, of, switchMap, tap } from 'rxjs';
+import { Subject, catchError, exhaustMap, map, merge, of, switchMap, takeUntil, tap } from 'rxjs';
+import { ChartSource } from '../chart/year-chart';
+import { YearSeries, buildYearSeries, countByYear } from '../chart/year-series';
 import { ApiError, toApiError } from '../core-api/api-error';
 import { CoreApi, SearchPage } from '../core-api/core-api';
 import { Paper } from '../core-api/paper';
-import { ChartSource } from '../chart/year-chart';
-import { YearSeries, buildYearSeries, countByYear } from '../chart/year-series';
 
 export interface SearchRequest {
   query: string;
   limit: number;
+  /** Optional drill-down to one publication year, chosen from the chart. */
+  year?: number | null;
 }
 
 export type SearchStatus = 'idle' | 'loading' | 'loaded' | 'error';
@@ -29,6 +31,14 @@ type Outcome = { ok: true; page: SearchPage } | { ok: false; error: ApiError };
 /** How many distinct searches to remember; CORE's rate limit makes repeats costly. */
 const CACHE_SIZE = 20;
 
+/** CORE does not page beyond this many results without its scroll API. */
+const MAX_OFFSET = 10_000;
+
+/** The query actually sent to CORE: the user's query, narrowed to a year if one is selected. */
+export function toCoreQuery(request: SearchRequest): string {
+  return request.year ? `(${request.query}) AND yearPublished:${request.year}` : request.query;
+}
+
 /**
  * Holds the state of the current search as signals.
  *
@@ -40,9 +50,12 @@ const CACHE_SIZE = 20;
 export class SearchStore {
   private readonly api = inject(CoreApi);
   private readonly requests = new Subject<SearchRequest>();
+  private readonly moreRequests = new Subject<void>();
+  private readonly aggregateRequests = new Subject<string>();
+  /** Emits when the store is reset, so in-flight responses are dropped. */
+  private readonly cancel = new Subject<void>();
   /** Insertion-ordered, so the first key is always the oldest entry. */
   private readonly cache = new Map<string, SearchPage>();
-  private readonly aggregateRequests = new Subject<string>();
   private readonly aggregateCache = new Map<string, Record<string, number>>();
   private readonly currentYear = new Date().getFullYear();
 
@@ -51,6 +64,8 @@ export class SearchStore {
   private readonly _papers = signal<Paper[]>([]);
   private readonly _totalHits = signal(0);
   private readonly _error = signal<ApiError | null>(null);
+  private readonly _loadingMore = signal(false);
+  private readonly _moreError = signal<ApiError | null>(null);
   private readonly _aggregate = signal<AggregateState>({ status: 'idle' });
 
   /** The request currently shown or in flight; null until the first search. */
@@ -60,6 +75,14 @@ export class SearchStore {
   readonly totalHits = this._totalHits.asReadonly();
   readonly error = this._error.asReadonly();
   readonly loading = computed(() => this._status() === 'loading');
+
+  readonly loadingMore = this._loadingMore.asReadonly();
+  /** A failed "load more" keeps the papers already on screen and reports here. */
+  readonly moreError = this._moreError.asReadonly();
+  readonly canLoadMore = computed(() => {
+    const loaded = this._papers().length;
+    return this._status() === 'loaded' && loaded < Math.min(this._totalHits(), MAX_OFFSET);
+  });
 
   /**
    * Year distribution for the chart. Prefers CORE's aggregate over every
@@ -91,6 +114,8 @@ export class SearchStore {
           this._request.set(request);
           this._status.set('loading');
           this._error.set(null);
+          this._moreError.set(null);
+          this._loadingMore.set(false);
         }),
         switchMap((request) => this.load(request)),
         takeUntilDestroyed(),
@@ -108,6 +133,34 @@ export class SearchStore {
         }
       });
 
+    this.moreRequests
+      .pipe(
+        // exhaustMap ignores extra clicks while a page is already on its way.
+        exhaustMap(() => {
+          const request = this._request();
+          if (!request || !this.canLoadMore()) return of(null);
+
+          this._loadingMore.set(true);
+          this._moreError.set(null);
+          return this.api.search(toCoreQuery(request), request.limit, this._papers().length).pipe(
+            map((page): Outcome => ({ ok: true, page })),
+            catchError((error: unknown) => of<Outcome>({ ok: false, error: toApiError(error) })),
+            // A new search (or a reset) makes this page irrelevant: drop it.
+            takeUntil(merge(this.requests, this.cancel)),
+          );
+        }),
+        takeUntilDestroyed(),
+      )
+      .subscribe((outcome) => {
+        if (!outcome) return;
+        this._loadingMore.set(false);
+        if (outcome.ok) {
+          this.append(outcome.page.papers);
+        } else {
+          this._moreError.set(outcome.error);
+        }
+      });
+
     this.aggregateRequests
       .pipe(
         tap(() => this._aggregate.set({ status: 'loading' })),
@@ -120,6 +173,7 @@ export class SearchStore {
             map((counts): AggregateState => ({ status: 'ready', query, counts })),
             // The chart is secondary: a failure here must not break the search.
             catchError(() => of<AggregateState>({ status: 'unavailable' })),
+            takeUntil(this.cancel),
           );
         }),
         takeUntilDestroyed(),
@@ -127,22 +181,42 @@ export class SearchStore {
       .subscribe((state) => this._aggregate.set(state));
   }
 
-  search(query: string, limit: number): void {
-    const trimmed = query.trim();
-    if (!trimmed) return;
-    this.requests.next({ query: trimmed, limit });
-    this.aggregate(trimmed);
+  search(request: SearchRequest): void {
+    const query = request.query.trim();
+    if (!query) return;
+    this.requests.next({ query, limit: request.limit, year: request.year ?? null });
+    this.aggregate(query);
   }
 
   /** Repeats the current request, e.g. after an error. */
   retry(): void {
     const request = this._request();
-    if (!request) return;
-    this.requests.next(request);
-    this.aggregate(request.query);
+    if (request) this.search(request);
   }
 
-  /** The aggregate depends only on the query, so changing the limit does not refetch it. */
+  /** Fetches the next page of the current search and appends it. */
+  loadMore(): void {
+    this.moreRequests.next();
+  }
+
+  /** Back to the initial, empty state, abandoning anything in flight. */
+  reset(): void {
+    this.cancel.next();
+    this._request.set(null);
+    this._status.set('idle');
+    this._papers.set([]);
+    this._totalHits.set(0);
+    this._error.set(null);
+    this._loadingMore.set(false);
+    this._moreError.set(null);
+    this._aggregate.set({ status: 'idle' });
+  }
+
+  /**
+   * The aggregate depends only on the base query, so changing the limit or
+   * drilling into a year does not refetch it: the chart keeps showing the
+   * whole picture while the list narrows.
+   */
   private aggregate(query: string): void {
     const current = this._aggregate();
     if (current.status === 'ready' && current.query === query) return;
@@ -150,16 +224,25 @@ export class SearchStore {
   }
 
   private load(request: SearchRequest) {
-    const key = `${request.limit}|${request.query}`;
+    const key = `${request.limit}|${request.year ?? ''}|${request.query}`;
     const cached = this.cache.get(key);
     if (cached) return of<Outcome>({ ok: true, page: cached });
 
-    return this.api.search(request.query, request.limit).pipe(
+    return this.api.search(toCoreQuery(request), request.limit).pipe(
       tap((page) => this.remember(key, page)),
       map((page): Outcome => ({ ok: true, page })),
       // Catch inside switchMap so one failure does not end the stream.
       catchError((error: unknown) => of<Outcome>({ ok: false, error: toApiError(error) })),
+      takeUntil(this.cancel),
     );
+  }
+
+  /** CORE can repeat a work across pages; keep the first occurrence of each id. */
+  private append(papers: Paper[]): void {
+    this._papers.update((current) => {
+      const seen = new Set(current.map((paper) => paper.id));
+      return [...current, ...papers.filter((paper) => !seen.has(paper.id))];
+    });
   }
 
   private remember(key: string, page: SearchPage): void {

@@ -12,6 +12,8 @@
   [series]="store.chart()?.series ?? null"
   [source]="store.chart()?.source ?? 'all'"
   [loading]="store.chartLoading()"
+  [selectedYear]="store.request()?.year ?? null"
+  (yearSelected)="onYearSelected($event)"
 />
 
 <section class="results" aria-label="Search results" [attr.aria-busy]="store.loading()">
@@ -30,11 +32,24 @@
           <p>
             Showing {{ store.papers().length | number }} of {{ store.totalHits() | number }} papers
             for <strong>{{ store.request()?.query }}</strong>
+            @if (store.request()?.year; as year) {
+              published in <strong>{{ year }}</strong>
+            }
           </p>
         }
       }
     }
   </div>
+
+  @if (store.request()?.year; as year) {
+    <p class="filters">
+      <button type="button" class="filter-chip" (click)="onYearSelected(null)">
+        Year: {{ year }}
+        <span aria-hidden="true">×</span>
+        <span class="visually-hidden">Remove year filter</span>
+      </button>
+    </p>
+  }
 
   @switch (store.status()) {
     @case ('loading') {
@@ -98,6 +113,29 @@
               <li><app-paper-card [paper]="paper" /></li>
             }
           </ul>
+
+          @if (store.moreError(); as error) {
+            <div class="notice error more-error" role="alert">
+              <h2>{{ error.title }}</h2>
+              <p>{{ error.detail }}</p>
+              @if (error.retryAt; as retryAt) {
+                <p>Searches will be accepted again at {{ retryAt | date: 'mediumTime' }}.</p>
+              }
+            </div>
+          }
+
+          @if (store.canLoadMore()) {
+            <div class="more">
+              <button
+                type="button"
+                class="secondary"
+                [disabled]="store.loadingMore()"
+                (click)="store.loadMore()"
+              >
+                {{ store.loadingMore() ? 'Loading…' : 'Load ' + store.request()?.limit + ' more' }}
+              </button>
+            </div>
+          }
         } @else {
           <div class="notice">
             <h2>No loaded papers match the filter</h2>
@@ -114,8 +152,11 @@
         <div class="notice">
           <h2>No papers matched</h2>
           <p>
-            Nothing in CORE matches <strong>{{ store.request()?.query }}</strong>. Try fewer AND
-            terms, add alternatives with OR, or check spelling.
+            Nothing in CORE matches <strong>{{ store.request()?.query }}</strong>
+            @if (store.request()?.year; as year) {
+              in {{ year }}
+            }
+            . Try fewer AND terms, add alternatives with OR, or check spelling.
           </p>
         </div>
       }

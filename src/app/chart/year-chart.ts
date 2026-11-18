@@ -8,6 +8,7 @@ import {
   effect,
   inject,
   input,
+  output,
   signal,
   viewChild,
 } from '@angular/core';
@@ -36,6 +37,11 @@ export class YearChart {
   readonly source = input<ChartSource>('all');
   readonly loading = input(false);
   readonly currentYear = input(new Date().getFullYear());
+  /** The year the result list is currently narrowed to, if any. */
+  readonly selectedYear = input<number | null>(null);
+
+  /** Emits the clicked year, or null when the selected year is clicked again. */
+  readonly yearSelected = output<number | null>();
 
   protected readonly recentSpan = RECENT_SPAN;
   protected readonly showAll = signal(false);
@@ -73,6 +79,7 @@ export class YearChart {
   constructor() {
     effect(() => {
       const points = this.points();
+      const selected = this.selectedYear();
       const labels = points.map((point) => String(point.year));
       const data = points.map((point) => point.count);
 
@@ -82,28 +89,50 @@ export class YearChart {
         // Update in place: cheaper than destroy/recreate and animates the change.
         this.chart.data.labels = labels;
         this.chart.data.datasets[0].data = data;
-        this.chart.update();
       }
+      // With a year selected, the other bars fade so the selection stands out.
+      this.chart.data.datasets[0].backgroundColor = points.map((point) =>
+        selected === null || point.year === selected ? this.colors.accent : this.colors.faded,
+      );
+      this.chart.update();
     });
 
     inject(DestroyRef).onDestroy(() => this.chart?.destroy());
   }
 
+  /** Toggles the selection; also used by the table so it works from the keyboard. */
+  protected select(year: number): void {
+    this.yearSelected.emit(year === this.selectedYear() ? null : year);
+  }
+
+  private colors = { accent: '#2f5bea', faded: '#c3cff8' };
+
   private createChart(canvas: HTMLCanvasElement, labels: string[], data: number[]) {
     const styles = getComputedStyle(canvas);
-    const accent = styles.getPropertyValue('--accent').trim() || '#2f5bea';
     const muted = styles.getPropertyValue('--text-muted').trim() || '#5b6475';
     const grid = styles.getPropertyValue('--border').trim() || '#e1e5ec';
+    this.colors = {
+      accent: styles.getPropertyValue('--accent').trim() || this.colors.accent,
+      faded: styles.getPropertyValue('--accent-faded').trim() || this.colors.faded,
+    };
 
     return new Chart(canvas, {
       type: 'bar',
       data: {
         labels,
-        datasets: [{ data, backgroundColor: accent, borderRadius: 3, maxBarThickness: 48 }],
+        datasets: [{ data, borderRadius: 3, maxBarThickness: 48 }],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        onClick: (_event, elements) => {
+          const point = elements.length ? this.points()[elements[0].index] : undefined;
+          if (point) this.select(point.year);
+        },
+        onHover: (event, elements) => {
+          const target = event.native?.target as HTMLElement | undefined;
+          if (target) target.style.cursor = elements.length ? 'pointer' : 'default';
+        },
         plugins: {
           tooltip: {
             displayColors: false,
@@ -112,6 +141,10 @@ export class YearChart {
                 const count = item.parsed.y ?? 0;
                 return `${count.toLocaleString()} ${count === 1 ? 'paper' : 'papers'}`;
               },
+              footer: (items) =>
+                Number(items[0]?.label) === this.selectedYear()
+                  ? 'Click to show all years'
+                  : 'Click to list papers from this year',
             },
           },
         },
