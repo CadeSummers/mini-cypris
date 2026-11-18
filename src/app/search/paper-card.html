@@ -1,0 +1,42 @@
+<article class="card">
+  <h3 class="title">
+    <a [href]="paper().url" target="_blank" rel="noopener noreferrer">{{ paper().title }}</a>
+  </h3>
+
+  <p class="meta">
+    <span>{{ authors() }}</span>
+    @if (paper().year; as year) {
+      <span class="dot" aria-hidden="true">·</span><span>{{ year }}</span>
+    }
+    @if (paper().publisher; as publisher) {
+      <span class="dot" aria-hidden="true">·</span><span>{{ publisher }}</span>
+    }
+  </p>
+
+  @if (paper().abstract) {
+    <p class="abstract" [class.clamped]="isLong() && !expanded()">{{ paper().abstract }}</p>
+    @if (isLong()) {
+      <button type="button" class="link-button" [attr.aria-expanded]="expanded()" (click)="toggle()">
+        {{ expanded() ? 'Show less' : 'Show more' }}
+      </button>
+    }
+  } @else {
+    <p class="abstract muted">No abstract available.</p>
+  }
+
+  <footer class="footer">
+    @if (paper().documentType; as type) {
+      <span class="badge">{{ type }}</span>
+    }
+    @if (paper().citationCount; as citations) {
+      <span class="badge">{{ citations }} {{ citations === 1 ? 'citation' : 'citations' }}</span>
+    }
+    <span class="spacer"></span>
+    @if (paper().pdfUrl; as pdf) {
+      <a [href]="pdf" target="_blank" rel="noopener noreferrer">PDF</a>
+    }
+    @if (paper().doi; as doi) {
+      <a [href]="paper().url" target="_blank" rel="noopener noreferrer">DOI: {{ doi }}</a>
+    }
+  </footer>
+</article>
