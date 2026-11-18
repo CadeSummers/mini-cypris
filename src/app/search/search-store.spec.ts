@@ -64,10 +64,29 @@ describe('SearchStore', () => {
     expect(store.status()).toBe('error');
     expect(store.papers()).toEqual([]);
     expect(store.totalHits()).toBe(0);
-    expect(store.errorMessage()).toBeTruthy();
+    expect(store.error()?.kind).toBe('server');
 
+    store.retry();
+    http.expectOne(isSearch).flush({ totalHits: 1, limit: 10, offset: 0, results: [{ id: 3 }] });
+    expect(store.status()).toBe('loaded');
+    expect(store.request()?.query).toBe('broken');
+    expect(store.error()).toBeNull();
+  });
+
+  it('serves a repeated search from the cache without a second request', () => {
     store.search('drone', 10);
     http.expectOne(isSearch).flush({ totalHits: 1, limit: 10, offset: 0, results: [{ id: 1 }] });
+
+    store.search('other', 10);
+    http.expectOne(isSearch).flush({ totalHits: 0, limit: 10, offset: 0, results: [] });
+
+    store.search('drone', 10);
+    http.expectNone(isSearch);
     expect(store.status()).toBe('loaded');
+    expect(store.papers().map((p) => p.id)).toEqual(['1']);
+
+    // A different limit is a different result set.
+    store.search('drone', 20);
+    http.expectOne(isSearch).flush({ totalHits: 1, limit: 20, offset: 0, results: [{ id: 1 }] });
   });
 });

@@ -1,0 +1,83 @@
+import { HttpErrorResponse } from '@angular/common/http';
+
+export type ApiErrorKind = 'rate-limit' | 'bad-query' | 'auth' | 'server' | 'network' | 'unknown';
+
+/** A failure described in terms the user can act on. */
+export interface ApiError {
+  kind: ApiErrorKind;
+  title: string;
+  detail: string;
+  /** For rate limits: when CORE says requests will be accepted again. */
+  retryAt: Date | null;
+}
+
+/** CORE sends e.g. "2026-11-18T17:17:00+0000"; add the colon strict parsers expect. */
+export function parseRetryAfter(value: string | null): Date | null {
+  if (!value) return null;
+  const date = new Date(value.replace(/([+-]\d{2})(\d{2})$/, '$1:$2'));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function toApiError(error: unknown): ApiError {
+  if (!(error instanceof HttpErrorResponse)) {
+    return {
+      kind: 'unknown',
+      title: 'Something went wrong',
+      detail: 'An unexpected error occurred. Please try again.',
+      retryAt: null,
+    };
+  }
+
+  const { status } = error;
+
+  if (status === 429) {
+    return {
+      kind: 'rate-limit',
+      title: 'CORE rate limit reached',
+      detail:
+        'CORE limits how many searches can be made per minute. ' +
+        'Adding an API key (see the README) raises the limit.',
+      retryAt: parseRetryAfter(error.headers.get('x-ratelimit-retry-after')),
+    };
+  }
+  if (status === 0) {
+    return {
+      kind: 'network',
+      title: 'Cannot reach CORE',
+      detail: 'Check your internet connection and that the dev server proxy is running.',
+      retryAt: null,
+    };
+  }
+  if (status === 400 || status === 422) {
+    return {
+      kind: 'bad-query',
+      title: 'CORE could not understand that query',
+      detail: 'Check field names and operators, or simplify the query and try again.',
+      retryAt: null,
+    };
+  }
+  if (status === 401 || status === 403) {
+    return {
+      kind: 'auth',
+      title: 'CORE rejected the API key',
+      detail: 'Check CORE_API_KEY in your .env file, or remove it to search anonymously.',
+      retryAt: null,
+    };
+  }
+  if (status >= 500) {
+    return {
+      kind: 'server',
+      title: 'CORE is having trouble',
+      detail:
+        `CORE returned an error (${status}). This is usually temporary, ` +
+        'though very broad or complex queries can also time out.',
+      retryAt: null,
+    };
+  }
+  return {
+    kind: 'unknown',
+    title: 'Something went wrong',
+    detail: `CORE returned an unexpected response (${status}).`,
+    retryAt: null,
+  };
+}

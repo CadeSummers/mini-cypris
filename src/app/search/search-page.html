@@ -7,32 +7,69 @@
   />
 </section>
 
-<section class="results" aria-label="Search results">
+<section class="results" aria-label="Search results" [attr.aria-busy]="store.loading()">
   <div class="status" role="status" aria-live="polite">
     @switch (store.status()) {
       @case ('idle') {
         <p>Enter a query above to search open-access research papers.</p>
       }
       @case ('loading') {
-        <p>Searching CORE…</p>
-      }
-      @case ('error') {
-        <p class="error">{{ store.errorMessage() }}</p>
+        <p>Searching CORE for <strong>{{ store.request()?.query }}</strong>…</p>
       }
       @case ('loaded') {
-        <p>
-          Showing {{ store.papers().length | number }} of {{ store.totalHits() | number }} papers
-          for <strong>{{ store.request()?.query }}</strong>
-        </p>
+        @if (store.papers().length) {
+          <p>
+            Showing {{ store.papers().length | number }} of {{ store.totalHits() | number }} papers
+            for <strong>{{ store.request()?.query }}</strong>
+          </p>
+        }
       }
     }
   </div>
 
-  @if (store.status() === 'loaded') {
-    <ul class="paper-list">
-      @for (paper of store.papers(); track paper.id) {
-        <li><app-paper-card [paper]="paper" /></li>
+  @switch (store.status()) {
+    @case ('loading') {
+      <ul class="paper-list" aria-hidden="true">
+        @for (i of skeletons; track i) {
+          <li class="skeleton">
+            <span class="line title"></span>
+            <span class="line short"></span>
+            <span class="line"></span>
+            <span class="line"></span>
+          </li>
+        }
+      </ul>
+    }
+
+    @case ('error') {
+      @if (store.error(); as error) {
+        <div class="notice error" role="alert">
+          <h2>{{ error.title }}</h2>
+          <p>{{ error.detail }}</p>
+          @if (error.retryAt; as retryAt) {
+            <p>Searches will be accepted again at {{ retryAt | date: 'mediumTime' }}.</p>
+          }
+          <button type="button" class="secondary" (click)="store.retry()">Try again</button>
+        </div>
       }
-    </ul>
+    }
+
+    @case ('loaded') {
+      @if (store.papers().length) {
+        <ul class="paper-list">
+          @for (paper of store.papers(); track paper.id) {
+            <li><app-paper-card [paper]="paper" /></li>
+          }
+        </ul>
+      } @else {
+        <div class="notice">
+          <h2>No papers matched</h2>
+          <p>
+            Nothing in CORE matches <strong>{{ store.request()?.query }}</strong>. Try fewer AND
+            terms, add alternatives with OR, or check spelling.
+          </p>
+        </div>
+      }
+    }
   }
 </section>
