@@ -108,9 +108,9 @@ production build and the Worker together.
 
 ## Design notes and AI assistance
 
-The reasoning behind each choice, with the alternatives it beat, is in
-[Design_Decisions.md](Design_Decisions.md).
+You can find the reasoning behind each choice, with the alternatives it beat out, in the
+[Design_Decisions.md](Design_Decisions.md) file.
 
-I built this with Claude Code, an AI coding assistant. I set the requirements, chose between the
-options it laid out and tried the result in the browser; it wrote most of the code, the tests
-and the first drafts of these documents. Every commit builds and passes the test suites in CI.
+This was coded with assistance from Claude Code, and audited by multiple models for accuracy,
+performance, and accessibility. Plain English search is handled by Llama and supported by
+Cloudflare. Every commit builds and passes the test suites in CI.

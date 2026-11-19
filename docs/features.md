@@ -55,8 +55,8 @@ added on top of them, grouped by theme. The reasoning for the larger ones is in
 ## Citation metrics
 
 - **On each card.** Where a paper has a DOI that OpenAlex knows: citation count, Field-Weighted
-  Citation Impact, Relative Citation Ratio (PubMed papers), and the h-index of an author, the
-  journal and the publisher. The figures come from [OpenAlex](https://openalex.org) and
+  Citation Impact, Relative Citation Ratio (PubMed papers), and the h-index of the journal, of
+  the publisher, and the highest among the paper's authors. The figures come from [OpenAlex](https://openalex.org) and
   [NIH iCite](https://icite.od.nih.gov) through the Worker.
 - **Sorting.** Loaded papers can be sorted by citations or FWCI, with an explanation of each
   figure one click away.

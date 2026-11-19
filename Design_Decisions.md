@@ -17,8 +17,10 @@ a current Angular codebase is moving towards.
 
 **Alternatives considered.**
 
-- Angular 21 over Angular 22, because the Angular 22 CLI requires Node 24.15 or later and Angular
-  21 also runs on Node 22. `package.json` states the supported versions in `engines`.
+- Angular 21 over Angular 22, because the Angular 22 CLI needs newer Node releases (22.22.3 or
+  later on the 22 line, 24.15 or later on the 24 line), while Angular 21 accepts Node 22.12 and
+  any Node 24, so it runs on more of the machines a reviewer is likely to have. `package.json`
+  states the versions this project supports in `engines`.
 - A client-rendered app over server-side rendering, because this is a search tool behind an API
   and SSR adds moving parts without a benefit that matters here.
 
@@ -192,14 +194,15 @@ with nothing highlighted.
 ### 5b. Citation metrics on each paper
 
 **Decision.** Where the data exists, a card shows citation count, Field-Weighted Citation Impact
-(FWCI), Relative Citation Ratio (RCR), and the h-index of an author, the journal and the
-publisher. The numbers come from OpenAlex and NIH iCite through a Worker endpoint, `POST /metrics`
+(FWCI), Relative Citation Ratio (RCR), and three h-indexes: the highest among the paper's
+authors, the journal's and the publisher's. The numbers come from OpenAlex and NIH iCite through a Worker endpoint, `POST /metrics`
 (`worker/paper-metrics.js`). A control sorts the loaded papers by citations or FWCI.
 
 **Why.**
 
-- The browser makes one request. The Worker makes up to five batched requests and joins them, and
-  each DOI is cached for a day for all visitors.
+- The browser makes one request. The Worker makes a handful of batched requests (papers, their
+  authors, journals, publishers, and iCite) and joins them, and each DOI is cached for a day for
+  all visitors.
 - The only input is a list of DOIs, each checked against the shape of a DOI. The visitor's query
   is never sent to OpenAlex or the NIH.
 - Papers appear as soon as CORE answers and metrics fill in afterwards, so a slow or failed lookup
@@ -210,13 +213,17 @@ publisher. The numbers come from OpenAlex and NIH iCite through a Worker endpoin
 - OpenAlex and iCite over CORE's own `citationCount`, because it was 0 for every paper in a sample
   of 46 and CORE has none of the other metrics.
 - OpenAlex over Google Scholar (no API), Scopus (a paid licence) and Semantic Scholar (no FWCI).
+- Every author's h-index over the first and last author's only, because the author with the highest h-index
+  can sit anywhere in the list, and "highest among the authors" is a claim a reader can check.
 - Matching by DOI over matching by title, because a title search can attach one paper's numbers to
   another with a similar title. Wrong numbers are worse than none.
 
 **Limits.** Coverage is partial and depends on how many CORE records carry a DOI: in a sample of
 25 papers for the drone query, 8 had a DOI and 6 had metrics. The page states the count. These are
 OpenAlex's figures, so its FWCI will differ from Scopus's, and RCR appears only on PubMed-indexed
-papers. The deployed Worker needs a free OpenAlex key, held as a secret.
+papers. Author lookups are capped at 1,500 per request, shared between its papers, so on a
+page of 100 papers a very long author list is cut to its first authors and its last. The deployed
+Worker needs a free OpenAlex key, held as a secret.
 
 ## 6. The "how many papers" field
 
