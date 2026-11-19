@@ -145,6 +145,8 @@ describe('Suggestions', () => {
   ])('explains %o and lets the user ask again', async (outcome, message) => {
     await answer(0, outcome);
     expect(text()).toContain(message);
+    // A limit is deliberate, and the page says what it is for; an outage is not.
+    expect(text().includes('paused to conserve model usage')).toBe(outcome.kind === 'limited');
 
     buttons()
       .find((button) => button.textContent!.trim() === 'Try again')!

@@ -29,7 +29,7 @@
         @case ('limited') {
           <p class="muted">
             <span>
-              No suggested searches for now.
+              Suggested searches are paused to conserve model usage.
               <app-ai-limit-notice [scope]="outcome.scope" [retryAt]="outcome.retryAt" />
             </span>
             <button type="button" class="ask" (click)="retry()">Try again</button>

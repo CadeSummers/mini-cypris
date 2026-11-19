@@ -821,7 +821,9 @@ apart and gives a time for both:
   minute). The Worker answers 429 marked `x-proxy-limit: model`, and the page says the
   requests came "from all visitors of this demo", so nobody thinks they caused it.
 
-The same notice is used under the plain-English box. A "Try again" link beside it asks once
+Under the result count the notice is introduced by "Suggested searches are paused to
+conserve model usage", so the visitor knows the pause is deliberate and what it is for. The
+same notice is used under the plain-English box. A "Try again" link beside it asks once
 more. Any other model failure is still "unavailable", with no time, because none is known.
 
 **Guard rails beyond those in 7b.**
@@ -839,10 +841,11 @@ more. Any other model failure is still "unavailable", with no time, because none
 **Trade-offs.**
 
 - **Every new search query now goes to the model,** which is a third party (Cloudflare).
-  Before this change only plain-English questions and empty searches did. The suggestions
-  line says "written by an AI model", but nothing on the page says so before the first
-  search is sent. For users with confidential research interests this is the cost of the
-  change, and a setting to turn suggestions off would be the remedy.
+  Before this change only plain-English questions and empty searches did. The note under the
+  plain-English box, which is on the page before anything is sent, now says that every search
+  from either box goes to the model and asks people not to include sensitive information.
+  For users with confidential research interests that is a disclosure, not a choice; a
+  setting to turn suggestions off would be the remedy.
 - **The daily allowance is used faster.** By my estimate it covers about 300 new model calls
   a day. Automatic suggestions spend one per new query, so a busy day can exhaust it, which
   also pauses plain-English search until midnight UTC. The page says so when it happens.

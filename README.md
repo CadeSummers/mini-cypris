@@ -219,7 +219,7 @@ e2e-worker/     browser tests of the built app and the Worker together, and thei
   a day by my estimate), and every new search uses one for its suggestions. When it runs out
   the page says the model has received too many requests and when it resets; the Boolean box
   is unaffected. Every new search query is sent to the model, not only plain-English
-  questions. The model can write a poor query; the query is always shown so it can be
+  questions; a note under the plain-English box says so. The model can write a poor query; the query is always shown so it can be
   corrected. Questions are sent to Cloudflare, which does not say in which country the model
   runs. Under `npm start` this one feature calls the deployed Worker.
 - Citation metrics cover only papers with a DOI that OpenAlex knows: 6 of 25 in one test

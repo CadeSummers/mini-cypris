@@ -160,6 +160,9 @@ test('when the model has had too many requests the page says so and when to come
 
   await expect(cards(page)).toHaveCount(10);
   await expect(suggestions(page)).toContainText(
+    'Suggested searches are paused to conserve model usage.',
+  );
+  await expect(suggestions(page)).toContainText(
     /The AI model \(Llama\) has received too many requests from you in a short time\.\s+It will take requests again in about 50 seconds, at \d/,
   );
 

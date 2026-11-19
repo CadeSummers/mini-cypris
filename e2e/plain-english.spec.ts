@@ -33,6 +33,18 @@ test('a plain-English question becomes a boolean query and runs it', async ({ pa
   expect(ai.calls.filter((call) => call.mode === 'translate')).toHaveLength(1);
 });
 
+test('the page says, before anything is sent, that every search goes to the model', async ({
+  page,
+  ai,
+}) => {
+  await page.goto('/');
+
+  await expect(page.locator('#question-note')).toContainText(
+    'every search you run from either box, is sent to an AI model (Meta Llama 3.3, run by Cloudflare)',
+  );
+  expect(ai.calls).toEqual([]);
+});
+
 test('a request that is not a paper search is refused and nothing is searched', async ({
   page,
   core,
