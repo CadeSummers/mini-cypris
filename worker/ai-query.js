@@ -19,8 +19,15 @@ export const MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 /** Longest input accepted, and longest query returned, in characters. */
 export const MAX_TEXT = 300;
 
-/** New model calls each visitor may cause per minute; cached answers are free. */
-export const AI_VISITOR_LIMIT = 5;
+/**
+ * New model calls each visitor may cause per minute; cached answers are free.
+ * Every new search asks for related searches, and a plain-English question is
+ * one more call, so the limit leaves room for several searches a minute.
+ */
+export const AI_VISITOR_LIMIT = 15;
+
+/** How long to ask a visitor to wait when Cloudflare says the model is busy. */
+const BUSY_WAIT_MS = 60_000;
 
 /** A translation does not go stale, so a repeated question is answered from the cache. */
 const CACHE_SECONDS = 86_400;
@@ -230,12 +237,56 @@ async function callModel(env, mode, text) {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ model: MODEL, ...input }),
     });
-    if (!response.ok) throw new Error(`model answered ${response.status}`);
+    if (!response.ok) {
+      const error = new Error(`model answered ${response.status}`);
+      error.status = response.status;
+      throw error;
+    }
     return (await response.json()).response;
   }
 
   if (!env.AI) throw new Error('no model is configured');
   return (await env.AI.run(MODEL, input)).response;
+}
+
+/**
+ * When the model refused a call because of volume, the time it should accept
+ * calls again (ms since 1970); null for any other failure.
+ *
+ * Workers AI reports two such cases, both as HTTP 429
+ * (developers.cloudflare.com/workers-ai/platform/errors):
+ *   3036: the account's free daily allocation is used up; it resets at 00:00 UTC;
+ *   3040: capacity temporarily exceeded; trying again shortly is the advice.
+ */
+export function modelLimitRetryAt(error, now = Date.now()) {
+  const message = String(error?.message ?? '');
+  if (/\b3036\b|daily free allocation|neurons/i.test(message)) {
+    const midnight = new Date(now);
+    midnight.setUTCHours(24, 0, 0, 0);
+    return midnight.getTime();
+  }
+  if (error?.status === 429 || /\b3040\b|capacity temporarily exceeded/i.test(message)) {
+    return now + BUSY_WAIT_MS;
+  }
+  return null;
+}
+
+/** 429 for a model that is taking no more calls, marked apart from the per-visitor limit. */
+function modelLimitResponse(retryAt) {
+  const seconds = Math.max(1, Math.ceil((retryAt - Date.now()) / 1000));
+  return new Response(
+    JSON.stringify({ message: 'The model has received too many requests; try again later.' }),
+    {
+      status: 429,
+      headers: {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
+        'x-proxy-limit': 'model',
+        'retry-after': String(seconds),
+        'x-ratelimit-retry-after': new Date(retryAt).toISOString(),
+      },
+    },
+  );
 }
 
 function reply(status, body, cacheStatus) {
@@ -278,8 +329,10 @@ export async function handleAiQuery(request, url, env, ctx, shared) {
   let result;
   try {
     result = toResult(await callModel(env, mode, text), mode, text);
-  } catch {
-    // Includes the free daily allowance running out. The Boolean box still works.
+  } catch (error) {
+    // Too many requests is told apart from an outage, so the page can say when to come back.
+    const retryAt = modelLimitRetryAt(error);
+    if (retryAt !== null) return modelLimitResponse(retryAt);
     return reply(503, { message: 'Plain-English search is unavailable right now.' });
   }
 

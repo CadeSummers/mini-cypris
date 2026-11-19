@@ -67,8 +67,10 @@ export function toApiError(error: unknown): ApiError {
   if (status === 400 || status === 422 || rejected) {
     return {
       kind: 'bad-query',
-      title: 'CORE could not understand that query',
-      detail: 'Check field names and operators, or simplify the query and try again.',
+      title: 'No papers found',
+      detail:
+        'CORE could not understand this query, so it returned an error instead of a list of ' +
+        'papers. Check field names and operators, or try one of the similar searches below.',
       retryAt: null,
     };
   }
@@ -83,10 +85,11 @@ export function toApiError(error: unknown): ApiError {
   if (status >= 500) {
     return {
       kind: 'server',
-      title: 'CORE is having trouble',
+      title: 'No papers found',
       detail:
-        `CORE returned an error (${status}). This is usually temporary, ` +
-        'though very broad or complex queries can also time out.',
+        `CORE answered with an error (${status}) instead of a list of papers. That usually ` +
+        'means it could not process this query, and is sometimes temporary. Try again, ' +
+        'simplify the query, or try one of the similar searches below.',
       retryAt: null,
     };
   }

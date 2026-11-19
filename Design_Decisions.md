@@ -701,9 +701,10 @@ prompt can be argued with; these cannot:
    it is not a query.
 3. **Nothing else is returned.** Whatever else the model writes is discarded. The app checks
    the query again with its own parser before running it.
-4. **Input is limited:** 300 characters, 5 model calls per visitor per minute (the same
+4. **Input is limited:** 300 characters, 15 new model calls per visitor per minute (the same
    Durable Object as the CORE limit, counted separately), and a repeated question is served
-   from the cache.
+   from the cache. The limit was 5 until suggestions became automatic (7c): a question plus
+   the suggestions for its results is two calls, so 5 allowed barely two searches a minute.
 
 The most a successful prompt injection can do is make the model write a different search
 query, which the user sees in the Boolean box before anything else happens.
@@ -742,8 +743,10 @@ refused as unclear, fixed by adding a question to the prompt's examples.
   not to include sensitive information.
 - **Where the model runs is not guaranteed.** Cloudflare's data page does not say in which
   country inference happens. For users who need that guarantee this would have to change.
-- **The free allowance can run out,** and JSON mode can fail. Both give "Plain-English search
-  is unavailable right now"; the Boolean box is unaffected.
+- **The free allowance can run out,** and Cloudflare can be short of capacity. Both are
+  reported as too many requests, with the time to come back (7c). JSON mode can also fail;
+  that gives "Plain-English search is unavailable right now". The Boolean box is unaffected
+  in every case.
 - **Local development uses the deployed Worker for this one endpoint** (`/ai` in
   `proxy.conf.mjs`), so `npm start` needs no Cloudflare account.
 - **Strict checking rejects some valid queries,** for example one using a field outside the
@@ -764,7 +767,7 @@ refused as unclear, fixed by adding a question to the prompt's examples.
 - _Rules instead of a model_ ("after 2000" becomes `yearPublished>2000`): free and
   predictable, but it only handles phrasings someone thought of.
 
-**Tests.** 16 Worker tests in `worker/ai-query.test.mjs` run the real Worker with a scripted
+**Tests.** 18 Worker tests in `worker/ai-query.test.mjs` run the real Worker with a scripted
 fake model, mostly to make the model misbehave: prose, unknown fields, wrong types, a reply
 that is not JSON. Each must come out as a refusal code. To prove the tests would notice, I
 switched the query check off by hand once: two tests failed, and I switched it back on.
@@ -778,20 +781,48 @@ _Brief step 8 (additions)._
 **Decision.** Two kinds of suggestion, both written by the same model through the same
 endpoint and the same checks, and both only ever offered as buttons:
 
-1. **"Did you mean".** When a query finds no papers, the model is asked once for the same
-   query with its spelling corrected. `Abiogenisis AND Exoplanet` gives
-   `abiogenesis AND exoplanet`.
-2. **"Suggest related searches".** A button under the result count. Clicking it asks for up
-   to three follow-up queries: one broader, one narrower, one on a neighbouring topic.
+1. **Related searches, after every search.** Once the papers are on screen, the model is
+   asked for up to three follow-up queries: one broader, one narrower, one on a neighbouring
+   topic. They appear under the result count when they arrive.
+2. **"Did you mean".** When a query finds no papers, or CORE answers it with an error, the
+   model is also asked for the same query with its spelling corrected.
+   `Abiogenisis AND Exoplanet` gives `abiogenesis AND exoplanet`.
 
-**Why these triggers.**
+**Changed on 2026-11-19.** Related searches used to wait behind a "Suggest related searches"
+button, so that an ordinary search sent nothing to the model. They are now automatic, at the
+product owner's request: a suggestion nobody has to ask for is seen far more often. What that
+costs is under "Trade-offs" below.
 
-- **An ordinary search sends nothing to the model.** People who never click the button and
-  whose searches find papers never have their queries sent to a third party. For the users
-  this is built for, that matters more than convenience.
-- **Zero results is when a typo is likely,** and it is rare enough to cost little of the
-  daily allowance.
+**Why it works this way.**
+
+- **The papers never wait for the model.** The suggestions component exists only once the
+  search has settled, so the model call starts after the results are shown. A slow or failed
+  model call changes one line under the result count and nothing else.
+- **One call per query, not per page.** The request depends on the query alone. Choosing a
+  year or type, changing the number of papers, or "Load more" asks nothing new, and a
+  repeated query is answered from the Worker's 24-hour cache without reaching the model.
+- **A failed search gets the same help as an empty one.** CORE answers some queries with a
+  server error instead of an empty list (7a), and a query the model wrote can be one of
+  them. The page then says "No papers found", says that CORE returned an error and which,
+  and offers the correction and similar searches. Before, it showed "CORE is having trouble
+  (500)" and nothing to do next.
+- **Not for every error.** A rate limit, a lost connection or a rejected key would stop any
+  other query too, so those keep their own messages and offer no suggestions.
 - **CORE has no "did you mean" of its own,** so a model is the only practical source.
+
+**When the model has had too many requests.** There are two cases, and the page tells them
+apart and gives a time for both:
+
+- **This visitor asked too often** (more than 15 new calls in a minute): "The AI model
+  (Llama) has received too many requests from you in a short time. It will take requests
+  again in about 40 seconds, at 2:03:11 PM."
+- **Cloudflare is refusing the whole app:** the free daily allocation is used up (its error
+  3036; it resets at 00:00 UTC) or the model is out of capacity (3040; the Worker suggests a
+  minute). The Worker answers 429 marked `x-proxy-limit: model`, and the page says the
+  requests came "from all visitors of this demo", so nobody thinks they caused it.
+
+The same notice is used under the plain-English box. A "Try again" link beside it asks once
+more. Any other model failure is still "unavailable", with no time, because none is known.
 
 **Guard rails beyond those in 7b.**
 
@@ -801,10 +832,27 @@ endpoint and the same checks, and both only ever offered as buttons:
 - **A suggestion identical to the query is dropped,** as are duplicates.
 - **No correction is requested when a year or type filter is on.** The filter is the likelier
   cause of the empty list.
-- **Nothing runs by itself.** A wrong suggestion costs a glance, not a search.
+- **No search runs by itself.** A wrong suggestion costs a glance, not a search.
+- **Silence when there is nothing to add.** If the model has no related searches and papers
+  are on screen, nothing is shown.
 
 **Trade-offs.**
 
+- **Every new search query now goes to the model,** which is a third party (Cloudflare).
+  Before this change only plain-English questions and empty searches did. The suggestions
+  line says "written by an AI model", but nothing on the page says so before the first
+  search is sent. For users with confidential research interests this is the cost of the
+  change, and a setting to turn suggestions off would be the remedy.
+- **The daily allowance is used faster.** By my estimate it covers about 300 new model calls
+  a day. Automatic suggestions spend one per new query, so a busy day can exhaust it, which
+  also pauses plain-English search until midnight UTC. The page says so when it happens.
+- **"No papers found" for a CORE error is a simplification.** CORE did not say there are
+  none; it failed to answer. The sentence under the heading says exactly that.
+- **The wait is worked out once,** when the notice appears, and does not count down. The
+  clock time beside it stays right.
+- **The two Cloudflare errors are recognised by their code and wording,** taken from
+  Cloudflare's error reference. I have not seen either happen on the live site. If Cloudflare
+  changes them, the page falls back to "unavailable".
 - **A suggestion is not checked against CORE before it is shown,** so "Did you mean" can lead
   to another empty list. Checking would spend the shared CORE allowance on every typo.
 - **The model's idea of "related" is general knowledge,** not CORE's contents.
@@ -813,8 +861,10 @@ endpoint and the same checks, and both only ever offered as buttons:
 
 **Alternatives.**
 
-- _Suggestions after every search_: most helpful, but it sends every query to the model and
-  uses the allowance fastest.
+- _Suggestions only on request_ (the first design): no query reaches the model unless the
+  user asks, and the allowance lasts longest, but most users never see a suggestion.
+- _Rewriting and re-running a failed query automatically_: fewer clicks, but the user would
+  be shown results for a search they did not write.
 - _Related searches from the chart's counts_ (top publishers, years): no model needed, but
   the chart already offers those as drill-downs.
 - _A dictionary spell-checker_: no model, but it would flag the technical vocabulary that

@@ -19,7 +19,7 @@ test('a plain-English question becomes a boolean query and runs it', async ({ pa
   await ask(page);
 
   await expect(cards(page)).toHaveCount(10);
-  expect(ai.calls).toEqual([{ mode: 'translate', text: QUESTION }]);
+  expect(ai.calls[0]).toEqual({ mode: 'translate', text: QUESTION });
   expect(core.searches).toEqual([{ q: WRITTEN, limit: 10, offset: 0 }]);
 
   // The query is in plain sight: in the Boolean box, in the URL and in a note.
@@ -27,10 +27,10 @@ test('a plain-English question becomes a boolean query and runs it', async ({ pa
   await expect(page).toHaveURL(/[?&]q=abiogenesis/);
   await expect(page.getByText('written from your question')).toBeVisible();
 
-  // Reloading the link runs the search again without asking the model again.
+  // Reloading the link runs the search again without asking for the query to be written again.
   await page.reload();
   await expect(cards(page)).toHaveCount(10);
-  expect(ai.calls).toHaveLength(1);
+  expect(ai.calls.filter((call) => call.mode === 'translate')).toHaveLength(1);
 });
 
 test('a request that is not a paper search is refused and nothing is searched', async ({
@@ -82,6 +82,6 @@ test('asking too often is explained with the time to try again', async ({ page, 
   await ask(page);
 
   await expect(page.locator('#question-feedback')).toContainText(
-    /asked several questions in a short time\.\s+Try again at \d/,
+    /The AI model \(Llama\) has received too many requests from you in a short time\.\s+It will take requests again in about 50 seconds, at \d/,
   );
 });

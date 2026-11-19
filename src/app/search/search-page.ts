@@ -111,6 +111,16 @@ export class SearchPage {
     );
   });
 
+  /**
+   * True when CORE answered this query with an error instead of papers. Other
+   * searches are worth offering then; they are not for a rate limit, a lost
+   * connection or a rejected key, which no other query would get past.
+   */
+  protected readonly searchFailed = computed(() => {
+    const kind = this.store.status() === 'error' ? this.store.error()?.kind : null;
+    return kind === 'server' || kind === 'bad-query';
+  });
+
   /** Words to mark on the cards: from the CORE query and, if valid, the refine box. */
   protected readonly highlight = computed(() => {
     const query = this.store.request()?.query;

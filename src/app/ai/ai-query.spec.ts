@@ -61,7 +61,26 @@ describe('AiQuery', () => {
     );
     expect(limited.outcome()).toEqual({
       kind: 'limited',
+      scope: 'visitor',
       retryAt: new Date('2026-11-18T17:17:00.000Z'),
+    });
+
+    const busy = ask();
+    http.expectOne('/ai/query').flush(
+      {},
+      {
+        status: 429,
+        statusText: 'Too Many Requests',
+        headers: {
+          'x-proxy-limit': 'model',
+          'x-ratelimit-retry-after': '2026-11-19T00:00:00.000Z',
+        },
+      },
+    );
+    expect(busy.outcome()).toEqual({
+      kind: 'limited',
+      scope: 'model',
+      retryAt: new Date('2026-11-19T00:00:00.000Z'),
     });
 
     const down = ask();

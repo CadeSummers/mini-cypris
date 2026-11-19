@@ -73,7 +73,14 @@ describe('PlainEnglishBar', () => {
   it.each<[AiOutcome, string]>([
     [{ kind: 'refused', reason: 'not_a_search' }, 'does not look like a request for research'],
     [{ kind: 'refused', reason: 'unclear' }, 'could not be turned into a search'],
-    [{ kind: 'limited', retryAt: null }, 'Try again in a minute'],
+    [
+      { kind: 'limited', scope: 'visitor', retryAt: null },
+      'The AI model (Llama) has received too many requests from you',
+    ],
+    [
+      { kind: 'limited', scope: 'model', retryAt: null },
+      'too many requests from all visitors of this demo',
+    ],
     [{ kind: 'unavailable' }, 'The Boolean box above still works'],
   ])('explains %o in its own words and runs no search', async (outcome, message) => {
     await ask('write me a poem');

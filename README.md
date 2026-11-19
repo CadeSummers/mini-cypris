@@ -166,9 +166,11 @@ Mapped to the steps in the project brief:
     The query appears in the Boolean box and the URL, so it can be read, edited and shared.
     The model can only produce queries: the Worker checks every answer and discards anything
     else. An American model was chosen deliberately; see `Design_Decisions.md` 7b.
-20. **Suggestions.** A search that finds nothing offers "Did you mean" with the spelling
-    corrected. "Suggest related searches" offers up to three follow-up queries. Ordinary
-    searches send nothing to the model.
+20. **Suggestions.** After every search, once the papers are on screen, the model suggests up
+    to three related searches. A search that finds nothing, or that CORE answers with an
+    error, says "No papers found" and also offers "Did you mean" with the spelling corrected.
+    If the model has received too many requests, the page says so and when it will take more.
+    See `Design_Decisions.md` 7c.
 21. **Forgiving queries.** CORE answers some harmless queries with a server error (for
     example `"exoplanet"`, a quoted single word). The app repairs those on the way out,
     offers one-click fixes for lowercase operators and wrong field names, and reports a
@@ -214,8 +216,10 @@ e2e-worker/     browser tests of the built app and the Worker together, and thei
   limits each visitor to 8 new CORE requests a minute, but several visitors searching at
   once can still reach CORE's own limit.
 - Plain-English search and suggestions depend on a free allowance of model calls (about 300
-  a day by my estimate). When it runs out they say they are unavailable; the Boolean box is
-  unaffected. The model can write a poor query; the query is always shown so it can be
+  a day by my estimate), and every new search uses one for its suggestions. When it runs out
+  the page says the model has received too many requests and when it resets; the Boolean box
+  is unaffected. Every new search query is sent to the model, not only plain-English
+  questions. The model can write a poor query; the query is always shown so it can be
   corrected. Questions are sent to Cloudflare, which does not say in which country the model
   runs. Under `npm start` this one feature calls the deployed Worker.
 - Citation metrics cover only papers with a DOI that OpenAlex knows: 6 of 25 in one test

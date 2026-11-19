@@ -44,12 +44,8 @@
           }
         }
         @case ('limited') {
-          You have asked several questions in a short time.
-          @if (problem.retryAt; as retryAt) {
-            Try again at {{ retryAt | date: 'mediumTime' }}.
-          } @else {
-            Try again in a minute.
-          }
+          <app-ai-limit-notice [scope]="problem.scope" [retryAt]="problem.retryAt" />
+          The Boolean box above still works.
         }
         @case ('unavailable') {
           Plain-English search is unavailable right now. The Boolean box above still works.

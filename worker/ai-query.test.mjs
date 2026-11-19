@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { after, before, beforeEach, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { Miniflare, Response } from 'miniflare';
-import { isSafeCoreQuery, MAX_TEXT, MODEL } from './ai-query.js';
+import { isSafeCoreQuery, MAX_TEXT, MODEL, modelLimitRetryAt } from './ai-query.js';
 
 const SITE = 'https://mini-cypris.example';
 const ENDPOINT = `${SITE}/ai/query`;
@@ -336,20 +336,20 @@ test('answers a repeated question from the cache, ignoring case and spacing', as
   await related.arrayBuffer();
 });
 
-test('allows each visitor 5 model calls a minute, separately from CORE searches', async () => {
+test('allows each visitor 15 model calls a minute, separately from CORE searches', async () => {
   const visitor = newVisitor();
-  for (let call = 0; call < 5; call += 1) {
+  for (let call = 0; call < 15; call += 1) {
     const reply = await ask({ mode: 'translate', text: newText() }, visitor);
     assert.equal(reply.status, 200);
     await reply.arrayBuffer();
   }
 
-  const sixth = await ask({ mode: 'translate', text: newText() }, visitor);
-  assert.equal(sixth.status, 429);
-  assert.equal(sixth.headers.get('x-proxy-limit'), 'visitor');
-  assert.ok(Number(sixth.headers.get('retry-after')) > 0);
-  await sixth.arrayBuffer();
-  assert.equal(modelCalls.length, 5);
+  const next = await ask({ mode: 'translate', text: newText() }, visitor);
+  assert.equal(next.status, 429);
+  assert.equal(next.headers.get('x-proxy-limit'), 'visitor');
+  assert.ok(Number(next.headers.get('retry-after')) > 0);
+  await next.arrayBuffer();
+  assert.equal(modelCalls.length, 15);
 
   // The same visitor can still search CORE, and another visitor can still ask.
   const search = await worker.dispatchFetch(`${SITE}/core-api/v3/search/works/?q=limit-check`, {
@@ -378,6 +378,43 @@ test('answers 503 when the model fails, and does not remember the failure', asyn
   assert.equal(retried.status, 200);
   assert.equal(retried.headers.get('x-proxy-cache'), 'MISS');
   await retried.arrayBuffer();
+});
+
+test('a model that is taking no more calls answers 429 with the time to come back', async () => {
+  const text = newText();
+  modelReply = () => answer(null, 429);
+  const before = Date.now();
+  const busy = await ask({ mode: 'related', text });
+  assert.equal(busy.status, 429);
+  assert.equal(busy.headers.get('x-proxy-limit'), 'model');
+  const retryAt = new Date(busy.headers.get('x-ratelimit-retry-after')).getTime();
+  assert.ok(retryAt >= before + 59_000 && retryAt <= Date.now() + 61_000);
+  await busy.arrayBuffer();
+
+  // Nothing was remembered: the next call reaches the model again.
+  modelReply = () => answer({ ok: true, queries: ['drone AND delivery'], reason: '' });
+  const retried = await ask({ mode: 'related', text });
+  assert.equal(retried.status, 200);
+  await retried.arrayBuffer();
+});
+
+test("tells Cloudflare's two volume errors apart from other failures", () => {
+  const now = Date.UTC(2026, 10, 19, 18, 30);
+
+  // The daily allowance comes back at the next midnight, UTC.
+  assert.equal(
+    modelLimitRetryAt(
+      new Error('3036: You have used up your daily free allocation of 10,000 neurons'),
+      now,
+    ),
+    Date.UTC(2026, 10, 20),
+  );
+  assert.equal(
+    modelLimitRetryAt(new Error('3040: Capacity temporarily exceeded, please try again.'), now),
+    now + 60_000,
+  );
+  assert.equal(modelLimitRetryAt(new Error('5007: No such model'), now), null);
+  assert.equal(modelLimitRetryAt(new Error('no model is configured'), now), null);
 });
 
 test('answers 503 when no model is configured', async () => {

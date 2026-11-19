@@ -14,13 +14,19 @@ export type AiMode = 'translate' | 'correct' | 'related';
 
 export type AiRefusal = 'not_a_search' | 'unclear';
 
+export type AiLimitScope = 'visitor' | 'model';
+
 export type AiOutcome =
   | { kind: 'queries'; queries: string[] }
   /** The model would not, or could not, write a query. */
   | { kind: 'refused'; reason: AiRefusal }
-  /** This visitor has asked too often; see the Worker's per-visitor limit. */
-  | { kind: 'limited'; retryAt: Date | null }
-  /** The model, or the day's free allowance, is not available. */
+  /**
+   * The model is taking no more calls for now. `visitor`: this visitor has asked
+   * too often (the Worker's per-visitor limit). `model`: Cloudflare is refusing
+   * calls from the whole app, for example once the day's free allowance is used.
+   */
+  | { kind: 'limited'; scope: AiLimitScope; retryAt: Date | null }
+  /** The model cannot be reached. */
   | { kind: 'unavailable' };
 
 /** Longest text the endpoint accepts (worker/ai-query.js enforces the same). */
@@ -57,7 +63,8 @@ export class AiQuery {
       catchError((error: unknown) => {
         if (error instanceof HttpErrorResponse && error.status === 429) {
           const retryAt = parseRetryAfter(error.headers.get('x-ratelimit-retry-after'));
-          return of<AiOutcome>({ kind: 'limited', retryAt });
+          const scope = error.headers.get('x-proxy-limit') === 'model' ? 'model' : 'visitor';
+          return of<AiOutcome>({ kind: 'limited', scope, retryAt });
         }
         return of<AiOutcome>({ kind: 'unavailable' });
       }),

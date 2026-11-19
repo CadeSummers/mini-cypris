@@ -53,6 +53,7 @@
     }
   </div>
 
+  <!-- Shown only once the search has settled, so suggestions never delay the papers. -->
   @if (store.status() === 'loaded') {
     <app-suggestions
       [query]="store.request()?.query ?? ''"
@@ -104,6 +105,13 @@
           }
           <button type="button" class="secondary" (click)="store.retry()">Try again</button>
         </div>
+      }
+      @if (searchFailed()) {
+        <app-suggestions
+          [query]="store.request()?.query ?? ''"
+          [failed]="true"
+          (picked)="onQueryPicked($event)"
+        />
       }
     }
 

@@ -11,36 +11,39 @@
       @switch (outcome.kind) {
         @case ('queries') {
           <p>
-            Related searches:
+            <span>
+              {{ empty() ? 'Similar searches to try' : 'Related searches' }}
+              <span class="muted">(written by an AI model)</span>:
+            </span>
             @for (query of outcome.queries; track query) {
               <button type="button" class="chip" (click)="picked.emit(query)">{{ query }}</button>
             }
           </p>
         }
         @case ('refused') {
-          <p class="muted">No related searches to suggest for this query.</p>
+          <!-- With papers on screen, having nothing to add needs no announcement. -->
+          @if (empty()) {
+            <p class="muted">No similar searches to suggest for this query.</p>
+          }
         }
         @case ('limited') {
           <p class="muted">
-            You have asked for several suggestions in a short time.
-            @if (outcome.retryAt; as retryAt) {
-              Try again at {{ retryAt | date: 'mediumTime' }}.
-            } @else {
-              Try again in a minute.
-            }
+            <span>
+              No suggested searches for now.
+              <app-ai-limit-notice [scope]="outcome.scope" [retryAt]="outcome.retryAt" />
+            </span>
+            <button type="button" class="ask" (click)="retry()">Try again</button>
           </p>
         }
         @case ('unavailable') {
-          <p class="muted">Suggestions are unavailable right now.</p>
+          <p class="muted">
+            Suggestions are unavailable right now.
+            <button type="button" class="ask" (click)="retry()">Try again</button>
+          </p>
         }
       }
     } @else {
       <p class="muted">Thinking of related searches…</p>
     }
-  } @else {
-    <p>
-      <button type="button" class="ask" (click)="suggestRelated()">Suggest related searches</button>
-      <span class="muted">(written by an AI model)</span>
-    </p>
   }
 </div>

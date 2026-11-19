@@ -1,5 +1,5 @@
-import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
+import { AiLimitNotice } from '../ai/ai-limit-notice';
 import { AiOutcome, AiQuery, MAX_AI_TEXT } from '../ai/ai-query';
 
 /** A question that was turned into a query, shown back so the user can see what was searched. */
@@ -15,7 +15,7 @@ interface Written {
  */
 @Component({
   selector: 'app-plain-english-bar',
-  imports: [DatePipe],
+  imports: [AiLimitNotice],
   templateUrl: './plain-english-bar.html',
   styleUrl: './plain-english-bar.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

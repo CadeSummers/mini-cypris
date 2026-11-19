@@ -54,11 +54,13 @@ test("CORE's rate limit gets its own message", async ({ page, core }) => {
   await expect(page.getByRole('alert').getByRole('heading')).toHaveText('CORE rate limit reached');
 });
 
-test('a CORE outage is reported without losing the query', async ({ page, core }) => {
+test('a CORE error says no papers were found, why, and keeps the query', async ({ page, core }) => {
   failOnce(core, { status: 503, body: {} });
   await submit(page);
 
-  await expect(page.getByRole('alert').getByRole('heading')).toHaveText('CORE is having trouble');
+  const alert = page.getByRole('alert');
+  await expect(alert.getByRole('heading')).toHaveText('No papers found');
+  await expect(alert).toContainText('CORE answered with an error (503) instead of a list');
   await expect(page.getByLabel('Boolean search')).toHaveValue('drone');
 });
 
@@ -75,17 +77,14 @@ test('a failed load more keeps the papers already shown', async ({ page, core })
   await expect(cards(page)).toHaveCount(10);
 });
 
-test('a query CORE rejects with a 500 is reported as a query problem, not an outage', async ({
-  page,
-  core,
-}) => {
+test('a query CORE rejects with a 500 is reported as a query problem', async ({ page, core }) => {
   failOnce(core, {
     status: 500,
     body: { message: 'Azure search failed with status code: 400. Error context: ...' },
   });
   await submit(page);
 
-  await expect(page.getByRole('alert').getByRole('heading')).toHaveText(
-    'CORE could not understand that query',
-  );
+  const alert = page.getByRole('alert');
+  await expect(alert.getByRole('heading')).toHaveText('No papers found');
+  await expect(alert).toContainText('CORE could not understand this query');
 });
