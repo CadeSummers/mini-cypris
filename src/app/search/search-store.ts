@@ -11,6 +11,7 @@ import {
 import { ChartSource } from '../chart/year-chart';
 import { YearSeries, buildYearSeries, countByYear } from '../chart/year-series';
 import { ApiError, toApiError } from '../core-api/api-error';
+import { normalizeForCore } from './query-fixes';
 import { Aggregations, CoreApi, SearchPage } from '../core-api/core-api';
 import { Paper } from '../core-api/paper';
 
@@ -51,7 +52,8 @@ export function toCoreQuery(request: SearchRequest): string {
   const filters: string[] = [];
   if (request.year) filters.push(`yearPublished:${request.year}`);
   if (request.documentType) filters.push(`documentType:"${request.documentType}"`);
-  return filters.length ? [`(${request.query})`, ...filters].join(' AND ') : request.query;
+  const query = normalizeForCore(request.query);
+  return filters.length ? [`(${query})`, ...filters].join(' AND ') : query;
 }
 
 /**
@@ -209,7 +211,7 @@ export class SearchStore {
           const cached = this.aggregateCache.get(query);
           if (cached) return of<AggregateState>({ status: 'ready', query, counts: cached });
 
-          return this.api.aggregate(query).pipe(
+          return this.api.aggregate(normalizeForCore(query)).pipe(
             tap((counts) => this.aggregateCache.set(query, counts)),
             map((counts): AggregateState => ({ status: 'ready', query, counts })),
             // The chart is secondary: a failure here must not break the search.

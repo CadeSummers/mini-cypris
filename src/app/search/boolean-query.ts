@@ -210,12 +210,3 @@ export function findQueryIssue(text: string): QueryIssue | null {
   const result = parseQuery(text);
   return result.ok ? null : result.issue;
 }
-
-/**
- * Lowercase and/or/not are plain words to CORE, which is rarely what the
- * user meant. Returns the first such word so the UI can offer a gentle hint.
- */
-export function findLowercaseOperator(text: string): string | null {
-  const unquoted = text.replace(/"[^"]*"/g, ' ');
-  return /(?:^|[\s(])(and|or|not)(?=[\s)]|$)/.exec(unquoted)?.[1] ?? null;
-}

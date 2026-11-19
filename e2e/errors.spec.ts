@@ -74,3 +74,18 @@ test('a failed load more keeps the papers already shown', async ({ page, core })
   await expect(page.getByRole('alert').getByRole('heading')).toHaveText('CORE rate limit reached');
   await expect(cards(page)).toHaveCount(10);
 });
+
+test('a query CORE rejects with a 500 is reported as a query problem, not an outage', async ({
+  page,
+  core,
+}) => {
+  failOnce(core, {
+    status: 500,
+    body: { message: 'Azure search failed with status code: 400. Error context: ...' },
+  });
+  await submit(page);
+
+  await expect(page.getByRole('alert').getByRole('heading')).toHaveText(
+    'CORE could not understand that query',
+  );
+});

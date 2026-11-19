@@ -39,10 +39,10 @@
 <div id="query-feedback" class="feedback" aria-live="polite">
   @if (showIssue()) {
     <p class="issue">{{ issue()?.message }}</p>
-  } @else if (lowercaseOperator(); as word) {
+  } @else if (tip(); as tip) {
     <p class="hint">
-      Tip: operators are uppercase. “{{ word }}” is searched as an ordinary word; use
-      {{ word.toUpperCase() }} to combine terms.
+      Tip: {{ tip.message }}
+      <button type="button" class="fix" (click)="applyTip(tip.fixed)">{{ tip.action }}</button>
     </p>
   }
 </div>

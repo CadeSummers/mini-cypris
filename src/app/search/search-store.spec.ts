@@ -21,6 +21,12 @@ describe('toCoreQuery', () => {
     );
   });
 
+  it('tidies the query for CORE without changing what the user typed', () => {
+    const request = { query: '"abiogenesis" AND "exoplanet"', limit: 10, year: 2021 };
+    expect(toCoreQuery(request)).toBe('(abiogenesis AND exoplanet) AND yearPublished:2021');
+    expect(request.query).toBe('"abiogenesis" AND "exoplanet"');
+  });
+
   it('narrows it to a document type, alone or together with a year', () => {
     expect(toCoreQuery({ query: 'a OR b', limit: 10, documentType: 'thesis' })).toBe(
       '(a OR b) AND documentType:"thesis"',

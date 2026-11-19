@@ -51,6 +51,16 @@ describe('toApiError', () => {
     expect(fromProxy.retryAt?.toISOString()).toBe('2026-11-18T17:17:00.000Z');
   });
 
+  it('reports a query CORE rejected as a bad query, even though CORE says 500', () => {
+    const error = toApiError(
+      new HttpErrorResponse({
+        status: 500,
+        error: { message: 'Azure search failed with status code: 400. Error context: ...' },
+      }),
+    );
+    expect(error.kind).toBe('bad-query');
+  });
+
   it('handles non-HTTP failures', () => {
     expect(toApiError(new Error('boom')).kind).toBe('unknown');
   });

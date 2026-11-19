@@ -128,3 +128,25 @@ test('a search opens from its URL, and Back returns to the previous search', asy
   // The earlier search is remembered, so going back costs no request.
   expect(core.searches).toHaveLength(2);
 });
+
+test('quotes around single words are removed on the way to CORE, which fails on them', async ({
+  page,
+  core,
+}) => {
+  await runSearch(page, '"Abiogenesis" AND "Exoplanet"');
+
+  expect(core.searches.at(-1)?.q).toBe('Abiogenesis AND Exoplanet');
+  expect(core.aggregates.at(-1)?.q).toBe('Abiogenesis AND Exoplanet');
+  // What the user typed is left as it was.
+  await expect(queryBox(page)).toHaveValue('"Abiogenesis" AND "Exoplanet"');
+});
+
+test('a wrong field name gets a one-click fix', async ({ page, core }) => {
+  await page.goto('/');
+  await queryBox(page).fill('drone and year>=2020');
+
+  await page.getByRole('button', { name: 'Use AND' }).click();
+  await page.getByRole('button', { name: 'Use yearPublished' }).click();
+  await expect(queryBox(page)).toHaveValue('drone AND yearPublished>=2020');
+  expect(core.searches).toEqual([]);
+});

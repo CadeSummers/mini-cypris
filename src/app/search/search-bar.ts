@@ -8,7 +8,8 @@ import {
   signal,
 } from '@angular/core';
 import { MAX_PAGE_SIZE } from '../core-api/core-api';
-import { findLowercaseOperator, findQueryIssue } from './boolean-query';
+import { findQueryIssue } from './boolean-query';
+import { findQueryTip } from './query-fixes';
 import { SearchRequest } from './search-store';
 
 export const EXAMPLE_QUERIES = [
@@ -50,7 +51,7 @@ export class SearchBar {
   protected readonly issue = computed(() =>
     this.draft().trim() ? findQueryIssue(this.draft()) : null,
   );
-  protected readonly lowercaseOperator = computed(() => findLowercaseOperator(this.draft()));
+  protected readonly tip = computed(() => findQueryTip(this.draft()));
   protected readonly showIssue = computed(() => this.attempted() && this.issue() !== null);
 
   protected onInput(event: Event): void {
@@ -83,6 +84,10 @@ export class SearchBar {
 
     this.attempted.set(false);
     this.search.emit({ query, limit: this.limitDraft() });
+  }
+
+  protected applyTip(fixed: string): void {
+    this.draft.set(fixed);
   }
 
   protected useExample(example: string): void {

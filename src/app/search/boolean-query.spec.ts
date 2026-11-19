@@ -1,4 +1,4 @@
-import { findLowercaseOperator, findQueryIssue, parseQuery } from './boolean-query';
+import { findQueryIssue, parseQuery } from './boolean-query';
 
 const term = (value: string, field: string | null = null) => ({ type: 'term', field, value });
 
@@ -76,15 +76,5 @@ describe('findQueryIssue', () => {
     const issue = findQueryIssue(query);
     expect(issue?.message).toContain(fragment);
     expect(issue?.position).toBe(position);
-  });
-});
-
-describe('findLowercaseOperator', () => {
-  it('spots lowercase operators but ignores quoted text and substrings', () => {
-    expect(findLowercaseOperator('drone and delivery')).toBe('and');
-    expect(findLowercaseOperator('(drone or delivery)')).toBe('or');
-    expect(findLowercaseOperator('"supply and demand"')).toBeNull();
-    expect(findLowercaseOperator('android notary')).toBeNull();
-    expect(findLowercaseOperator('drone AND delivery')).toBeNull();
   });
 });

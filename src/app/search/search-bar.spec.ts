@@ -67,6 +67,15 @@ describe('SearchBar', () => {
     expect(el().querySelector('.hint')?.textContent).toContain('AND');
   });
 
+  it('applies a tip with one click', async () => {
+    await type(queryInput(), 'drone and delivery', 'input');
+    el().querySelector<HTMLButtonElement>('.fix')?.click();
+    await fixture.whenStable();
+
+    expect(queryInput().value).toBe('drone AND delivery');
+    expect(el().querySelector('.hint')).toBeNull();
+  });
+
   it('snaps an out-of-range limit back into range', async () => {
     await type(limitInput(), '5000', 'change');
     expect(limitInput().value).toBe('100');

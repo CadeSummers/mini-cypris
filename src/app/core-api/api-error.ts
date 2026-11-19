@@ -60,7 +60,11 @@ export function toApiError(error: unknown): ApiError {
       retryAt: null,
     };
   }
-  if (status === 400 || status === 422) {
+  // CORE reports a query its search backend rejected as a server error, with
+  // the backend's own status in the message. Retrying never helps, so say so.
+  const message = (error.error as { message?: unknown } | null)?.message;
+  const rejected = status >= 500 && typeof message === 'string' && /status code: 400/.test(message);
+  if (status === 400 || status === 422 || rejected) {
     return {
       kind: 'bad-query',
       title: 'CORE could not understand that query',
