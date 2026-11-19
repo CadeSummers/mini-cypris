@@ -16,6 +16,8 @@ alternatives considered, is in [Design_Decisions.md](Design_Decisions.md).
 
 ![Search results for a boolean query, with the papers-per-year chart above the paper cards](docs/search-desktop.png)
 
+![A plain-English question turned into a boolean query, with the results and three related searches suggested below the chart](docs/plain-english.png)
+
 | Year drill-down                                                                                     | Document type drill-down                                                                                                  | Chart by publisher                                                                        | Phone width                                                          |
 | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | ![The 2021 bar selected in the chart, with the list narrowed to that year](docs/year-drilldown.png) | ![The Thesis type selected in the document type chart, with the list narrowed to the 862 theses](docs/type-drilldown.png) | ![The ten most common publishers for the query as ranked bars](docs/chart-publishers.png) | ![The same search at a 390-pixel-wide screen](docs/search-phone.png) |
@@ -138,31 +140,46 @@ Mapped to the steps in the project brief:
 14. **Highlighted matches.** Query words are marked in each title and abstract, for both the
     CORE search and the refine box. Terms under `NOT` are left unmarked, and `title:` terms
     are marked in titles only.
-15. **Tests.** 110 unit tests covering the API service, data cleaning, the boolean parser and
+15. **Tests.** 138 unit tests covering the API service, data cleaning, the boolean parser and
     matcher, the search store (cancellation, caching, paging, fallback), chart data and URL
     handling.
-16. **End-to-end tests.** 20 Playwright tests drive the app in a real browser against a
+16. **End-to-end tests.** 32 Playwright tests drive the app in a real browser against a
     mocked CORE: search, the number of papers, invalid syntax, year and document type drill-down, refine, load
     more, both rate-limit messages, shareable URLs, the chart switcher and its fallback, plus
     two automated accessibility scans. They run in CI on every push.
-17. **Worker tests.** 12 tests run the real Worker in Cloudflare's runtime locally (Miniflare)
+17. **Worker tests.** 28 tests run the real Worker in Cloudflare's runtime locally (Miniflare)
     against a fake CORE. They check that the key is sent to CORE and never to the browser,
     that only the two allowed endpoints are proxied, that repeated queries come from the
     cache, and that a visitor's 9th new request in a minute is refused.
-18. **Routing tests.** 6 browser tests run the production build and the Worker together under
+18. **Routing tests.** 7 browser tests run the production build and the Worker together under
     `wrangler dev`, using the real `wrangler.jsonc`. They check which requests reach the
     Worker and which are served as files, and that the per-visitor limit message appears in
     the page.
+19. **Plain-English search.** "Better yet, ask me in plain English": a sentence such as
+    "show me papers about abiogenesis and exoplanets published after 2000" is turned into a
+    boolean query by a language model (Meta Llama 3.3 70B on Cloudflare Workers AI) and run.
+    The query appears in the Boolean box and the URL, so it can be read, edited and shared.
+    The model can only produce queries: the Worker checks every answer and discards anything
+    else. An American model was chosen deliberately; see `Design_Decisions.md` 7b.
+20. **Suggestions.** A search that finds nothing offers "Did you mean" with the spelling
+    corrected. "Suggest related searches" offers up to three follow-up queries. Ordinary
+    searches send nothing to the model.
+21. **Forgiving queries.** CORE answers some harmless queries with a server error (for
+    example `"exoplanet"`, a quoted single word). The app repairs those on the way out,
+    offers one-click fixes for lowercase operators and wrong field names, and reports a
+    rejected query as a query problem instead of an outage.
 
 ## Project layout
 
 ```
 src/app/
   core-api/     CORE client, raw response types, the clean Paper model, error mapping
-  search/       search page, search bar, paper card, search store, boolean parser and matcher
+  search/       search page, search bar, paper card, search store, boolean parser and matcher,
+                query fixes, the plain-English box and the suggestions
+  ai/           client for the app's own /ai/query endpoint
   chart/        year chart, ranked top-ten chart, the switcher, and the pure functions behind them
-proxy.conf.mjs  dev-server proxy that adds the API key
-worker/         the same proxy as a Cloudflare Worker, for the deployed site, and its tests
+proxy.conf.mjs  dev-server proxy that adds the API key (and forwards /ai to the deployed Worker)
+worker/         the same proxy as a Cloudflare Worker, the plain-English endpoint, and their tests
 wrangler.jsonc  Cloudflare build output and routing settings
 e2e/            Playwright end-to-end tests and the mocked CORE they run against
 e2e-worker/     browser tests of the built app and the Worker together, and their fake CORE
@@ -174,6 +191,11 @@ e2e-worker/     browser tests of the built app and the Worker together, and thei
   The Worker caches repeated queries (searches for 10 minutes, year counts for an hour) and
   limits each visitor to 8 new CORE requests a minute, but several visitors searching at
   once can still reach CORE's own limit.
+- Plain-English search and suggestions depend on a free allowance of model calls (about 300
+  a day by my estimate). When it runs out they say they are unavailable; the Boolean box is
+  unaffected. The model can write a poor query; the query is always shown so it can be
+  corrected. Questions are sent to Cloudflare, which does not say in which country the model
+  runs. Under `npm start` this one feature calls the deployed Worker.
 - The in-browser refine filter matches by substring and only sees the loaded papers; it is a
   convenience on top of CORE's search, not a replacement for it.
 - CORE pages by offset only up to 10,000 results; "Load more" stops there.
@@ -191,3 +213,6 @@ e2e-worker/     browser tests of the built app and the Worker together, and thei
 
 This project was built with the help of an AI coding assistant (Claude Code). The design
 decisions and trade-offs are documented in [Design_Decisions.md](Design_Decisions.md).
+
+Separately, the app itself uses a language model for plain-English search and suggestions
+(additions 19 and 20). That model only ever writes search queries.
