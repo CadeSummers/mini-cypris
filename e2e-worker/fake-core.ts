@@ -1,4 +1,5 @@
-// A stand-in for CORE that the Worker talks to during the routing tests.
+// A stand-in for CORE, and for the language model, that the Worker talks to
+// during the routing tests.
 // Started by playwright.worker.config.ts; run by Node directly (it strips the types).
 //
 // It answers the two endpoints the app uses with the same made-up data as the
@@ -43,6 +44,13 @@ const server = createServer((request, response) => {
   if (request.method === 'POST' && url.pathname === '/v3/search/works/aggregate') {
     request.resume();
     return send(200, AGGREGATE_RESPONSE);
+  }
+  // The language model the Worker asks to write queries (see worker/ai-query.js).
+  if (request.method === 'POST' && url.pathname === '/run') {
+    request.resume();
+    return send(200, {
+      response: { ok: true, queries: ['drone AND delivery AND yearPublished>2000'], reason: '' },
+    });
   }
   return send(404, { message: 'The fake CORE does not serve this path.' });
 });

@@ -42,6 +42,8 @@ function startWorker(bindings, outboundService = fakeCore) {
     workers: [
       {
         modules: true,
+        // core-proxy.js imports ai-query.js; tell Miniflare both are ES modules.
+        modulesRules: [{ type: 'ESModule', include: ['**/*.js'] }],
         scriptPath: fileURLToPath(new URL('./core-proxy.js', import.meta.url)),
         compatibilityDate: '2025-01-01',
         bindings,

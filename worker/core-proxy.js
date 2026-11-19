@@ -8,6 +8,7 @@
 // aggregate endpoints is refused, so the key cannot be used for other calls.
 
 import { DurableObject } from 'cloudflare:workers';
+import { handleAiQuery } from './ai-query.js';
 
 const CORE_ORIGIN = 'https://api.core.ac.uk';
 
@@ -122,8 +123,12 @@ export class VisitorLimiter extends DurableObject {
   }
 }
 
-/** Asks the visitor's limiter for permission to make one CORE request. */
-async function takeVisitorSlot(request, env) {
+/**
+ * Asks the visitor's limiter for permission to make one request. `scope` gives
+ * a separate count per kind of request: CORE searches and model calls each
+ * have their own.
+ */
+async function takeVisitorSlot(request, env, scope = '', limit = VISITOR_LIMIT) {
   const allowed = { allowed: true, retryAt: null };
   // The binding is absent in some local setups; the proxy still works without it.
   if (!env.VISITOR_LIMITER) return allowed;
@@ -131,8 +136,8 @@ async function takeVisitorSlot(request, env) {
   // Set by Cloudflare itself, so a visitor cannot spoof it to dodge the limit.
   const visitor = request.headers.get('cf-connecting-ip') ?? 'unknown';
   try {
-    const limiter = env.VISITOR_LIMITER.get(env.VISITOR_LIMITER.idFromName(visitor));
-    return await limiter.take(VISITOR_LIMIT, VISITOR_WINDOW_MS);
+    const limiter = env.VISITOR_LIMITER.get(env.VISITOR_LIMITER.idFromName(scope + visitor));
+    return await limiter.take(limit, VISITOR_WINDOW_MS);
   } catch {
     // If the limiter itself fails, serving the search matters more than counting it.
     return allowed;
@@ -142,7 +147,7 @@ async function takeVisitorSlot(request, env) {
 function visitorLimitResponse(retryAt) {
   const seconds = Math.max(1, Math.ceil((retryAt - Date.now()) / 1000));
   return new Response(
-    JSON.stringify({ message: 'Too many new searches from this visitor; try again shortly.' }),
+    JSON.stringify({ message: 'Too many new requests from this visitor; try again shortly.' }),
     {
       status: 429,
       headers: {
@@ -219,6 +224,13 @@ export default {
     const url = new URL(request.url);
     if (url.pathname.startsWith('/core-api/')) {
       return proxyToCore(request, url, env, ctx);
+    }
+    if (url.pathname.startsWith('/ai/')) {
+      return handleAiQuery(request, url, env, ctx, {
+        sha256Hex,
+        takeVisitorSlot,
+        visitorLimitResponse,
+      });
     }
     // Everything else is the Angular app; wrangler.jsonc normally serves it
     // without invoking this Worker at all.

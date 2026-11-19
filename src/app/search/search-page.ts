@@ -6,6 +6,7 @@ import { cleanCategoryLabel } from '../chart/category-series';
 import { ChartPanel } from '../chart/chart-panel';
 import { parseQuery } from './boolean-query';
 import { PaperCard } from './paper-card';
+import { PlainEnglishBar } from './plain-english-bar';
 import { collectHighlightTerms } from './highlight';
 import { filterPapers } from './paper-matcher';
 import { DEFAULT_LIMIT, SearchBar, clampLimit } from './search-bar';
@@ -41,7 +42,7 @@ export function paramsFromRequest(request: SearchRequest): Record<string, string
 
 @Component({
   selector: 'app-search-page',
-  imports: [DatePipe, DecimalPipe, PaperCard, SearchBar, ChartPanel],
+  imports: [DatePipe, DecimalPipe, PaperCard, PlainEnglishBar, SearchBar, ChartPanel],
   providers: [SearchStore],
   templateUrl: './search-page.html',
   styleUrl: './search-page.scss',
@@ -124,6 +125,11 @@ export class SearchPage {
       year: same ? current.year : null,
       documentType: same ? current.documentType : null,
     });
+  }
+
+  /** Runs a query the user did not type: one the model wrote or suggested. */
+  protected onQueryPicked(query: string): void {
+    this.onSearch({ query, limit: this.store.request()?.limit ?? DEFAULT_LIMIT });
   }
 
   protected onYearSelected(year: number | null): void {

@@ -34,4 +34,13 @@ export default {
     pathRewrite: { '^/core-api': '' },
     headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
   },
+  // Plain-English search needs a language model, which runs on Cloudflare (see
+  // worker/ai-query.js). In development the request goes to the deployed
+  // Worker, so `npm start` needs no Cloudflare account. If it cannot be
+  // reached, the box says so and the rest of the app is unaffected.
+  '/ai': {
+    target: 'https://mini-cypris.cadetsummers.workers.dev',
+    changeOrigin: true,
+    secure: true,
+  },
 };

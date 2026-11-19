@@ -5,6 +5,11 @@
     [busy]="store.loading()"
     (search)="onSearch($event)"
   />
+  <app-plain-english-bar
+    [busy]="store.loading()"
+    [currentQuery]="store.request()?.query ?? ''"
+    (queryWritten)="onQueryPicked($event)"
+  />
 </section>
 
 <app-chart-panel

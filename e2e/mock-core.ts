@@ -80,14 +80,71 @@ export class MockCore {
   }
 }
 
-/** `test` with a `core` fixture: CORE is mocked before the page loads anything. */
-export const test = base.extend<{ core: MockCore }>({
+export interface AiCall {
+  mode: string;
+  text: string;
+}
+
+/**
+ * Stands in for the app's plain-English endpoint (and so for the language
+ * model behind it). Unless a test says otherwise it declines, which is the
+ * quietest answer: no suggestion appears and no search is started.
+ */
+export class MockAi {
+  readonly calls: AiCall[] = [];
+  readonly unexpected: string[] = [];
+
+  private handler: (call: AiCall) => Reply = () => ({ body: { ok: false, reason: 'unclear' } });
+
+  onAsk(handler: (call: AiCall) => Reply): void {
+    this.handler = handler;
+  }
+
+  async install(page: Page): Promise<void> {
+    await page.route('**/ai/**', async (route) => {
+      const request = route.request();
+      const url = new URL(request.url());
+      let reply: Reply;
+
+      if (request.method() === 'POST' && url.pathname === '/ai/query') {
+        const call = request.postDataJSON() as AiCall;
+        this.calls.push(call);
+        reply = this.handler(call);
+      } else {
+        this.unexpected.push(`${request.method()} ${url.pathname}`);
+        reply = { status: 404, body: { message: 'Not mocked' } };
+      }
+
+      await route.fulfill({
+        status: reply.status ?? 200,
+        headers: reply.headers,
+        contentType: 'application/json',
+        body: JSON.stringify(reply.body ?? {}),
+      });
+    });
+  }
+}
+
+/**
+ * `test` with `core` and `ai` fixtures: both are mocked before the page loads
+ * anything, so no test can reach the real CORE or the real model.
+ */
+export const test = base.extend<{ core: MockCore; ai: MockAi }>({
   core: [
     async ({ page }, use) => {
       const core = new MockCore();
       await core.install(page);
       await use(core);
       expect(core.unexpected, 'requests to CORE that the mock does not cover').toEqual([]);
+    },
+    { auto: true },
+  ],
+  ai: [
+    async ({ page }, use) => {
+      const ai = new MockAi();
+      await ai.install(page);
+      await use(ai);
+      expect(ai.unexpected, 'requests to /ai/ that the mock does not cover').toEqual([]);
     },
     { auto: true },
   ],

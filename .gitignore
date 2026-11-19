@@ -54,3 +54,6 @@ Thumbs.db
 # Playwright
 test-results/
 playwright-report/
+
+# Written by playwright.worker.config.ts for the routing tests
+wrangler.e2e.jsonc

@@ -9,8 +9,10 @@ interface Call {
   hasKey: boolean;
 }
 
+/** Requests the Worker made to CORE (the fake also plays the language model, at /run). */
 async function coreCalls(request: APIRequestContext): Promise<Call[]> {
-  return (await request.get(`${FAKE_CORE}/__calls`)).json();
+  const calls = (await (await request.get(`${FAKE_CORE}/__calls`)).json()) as Call[];
+  return calls.filter((call) => call.path.startsWith('/v3/'));
 }
 
 test('the app is served as files and its searches go through the Worker', async ({
@@ -53,6 +55,32 @@ test('an unknown page address still loads the app', async ({ page }) => {
 
   expect(response?.status()).toBe(200);
   await expect(page.getByLabel('Boolean search')).toBeVisible();
+});
+
+test('a plain-English question goes through the Worker to the model and runs a search', async ({
+  page,
+  request,
+}) => {
+  await page.goto('/');
+  await page.getByLabel('Better yet, ask me in plain English').fill('drone delivery since 2000');
+  const asked = page.waitForResponse((response) => response.url().endsWith('/ai/query'));
+  await page.getByRole('button', { name: 'Ask', exact: true }).click();
+
+  const answer = await asked;
+  expect(answer.status()).toBe(200);
+  expect(await answer.json()).toEqual({
+    ok: true,
+    queries: ['drone AND delivery AND yearPublished>2000'],
+  });
+  await expect(page.getByLabel('Boolean search')).toHaveValue(
+    'drone AND delivery AND yearPublished>2000',
+  );
+  await expect(page.getByRole('article')).toHaveCount(10);
+
+  // /ai/ paths belong to the Worker too: a wrong one is refused, not answered with the app.
+  const other = await request.get('/ai/anything');
+  expect(other.status()).toBe(404);
+  expect(other.headers()['content-type']).toContain('application/json');
 });
 
 test('API paths always reach the Worker and never fall back to the app', async ({ request }) => {
