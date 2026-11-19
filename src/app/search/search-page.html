@@ -3,7 +3,7 @@
     [query]="store.request()?.query ?? ''"
     [limit]="store.request()?.limit ?? defaultLimit"
     [busy]="store.loading()"
-    (search)="onSearch($event)"
+    (submitted)="onSearch($event)"
   />
   <app-plain-english-bar
     [busy]="store.loading()"

@@ -41,7 +41,7 @@ describe('SearchBar', () => {
   beforeEach(async () => {
     fixture = TestBed.createComponent(SearchBar);
     emitted = [];
-    fixture.componentInstance.search.subscribe((request) => emitted.push(request));
+    fixture.componentInstance.submitted.subscribe((request) => emitted.push(request));
     await fixture.whenStable();
   });
 

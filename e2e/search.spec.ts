@@ -33,6 +33,19 @@ test('a boolean search lists papers, the total, and highlights the query words',
   await expect(first.locator('h3 mark')).toHaveText(['Drone', 'delivery']);
 });
 
+test('pressing Enter in the search box runs the search', async ({ page, core }) => {
+  await page.goto('/');
+  await queryBox(page).fill('drone');
+  await queryBox(page).press('Enter');
+
+  await expect(cards(page)).toHaveCount(10);
+  await expect(page).toHaveURL(/[?&]q=drone/);
+  // Chrome also fires a native "search" event on Enter; it must not start a second navigation.
+  await page.waitForTimeout(300);
+  await expect(cards(page)).toHaveCount(10);
+  expect(core.searches).toEqual([{ q: 'drone', limit: 10, offset: 0 }]);
+});
+
 test('the number of papers to fetch is sent to CORE and clamped to 1-100', async ({
   page,
   core,

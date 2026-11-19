@@ -39,7 +39,8 @@ export class SearchBar {
   readonly limit = input(DEFAULT_LIMIT);
   readonly busy = input(false);
 
-  readonly search = output<SearchRequest>();
+  /** Not named "search": Chrome fires a native DOM event of that name on Enter in a search box. */
+  readonly submitted = output<SearchRequest>();
 
   protected readonly examples = EXAMPLE_QUERIES;
   protected readonly maxLimit = MAX_PAGE_SIZE;
@@ -83,7 +84,7 @@ export class SearchBar {
     if (this.issue()) return;
 
     this.attempted.set(false);
-    this.search.emit({ query, limit: this.limitDraft() });
+    this.submitted.emit({ query, limit: this.limitDraft() });
   }
 
   protected applyTip(fixed: string): void {
