@@ -46,12 +46,20 @@
     <p class="abstract muted">No abstract available.</p>
   }
 
+  @if (metricItems().length) {
+    <dl class="metrics">
+      @for (item of metricItems(); track item.label) {
+        <div class="metric" [title]="item.meaning">
+          <dt>{{ item.label }}</dt>
+          <dd>{{ item.value }}</dd>
+        </div>
+      }
+    </dl>
+  }
+
   <footer class="footer">
     @if (paper().documentType; as type) {
       <span class="badge">{{ type }}</span>
-    }
-    @if (paper().citationCount; as citations) {
-      <span class="badge">{{ citations }} {{ citations === 1 ? 'citation' : 'citations' }}</span>
     }
     <span class="spacer"></span>
     @if (paper().pdfUrl; as pdf) {

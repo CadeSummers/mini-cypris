@@ -126,10 +126,54 @@ export class MockAi {
 }
 
 /**
- * `test` with `core` and `ai` fixtures: both are mocked before the page loads
- * anything, so no test can reach the real CORE or the real model.
+ * Stands in for the app's citation metrics endpoint (and so for OpenAlex and
+ * NIH iCite behind it). Unless a test says otherwise it knows no paper, so the
+ * cards look as they did before metrics existed.
  */
-export const test = base.extend<{ core: MockCore; ai: MockAi }>({
+export class MockMetrics {
+  /** The DOIs of each request, in order. */
+  readonly calls: string[][] = [];
+  readonly unexpected: string[] = [];
+
+  private handler: (dois: string[]) => Reply = () => ({ body: { metrics: {} } });
+
+  onLookUp(handler: (dois: string[]) => Reply): void {
+    this.handler = handler;
+  }
+
+  async install(page: Page): Promise<void> {
+    await page.route(
+      (url) => url.pathname === '/metrics' || url.pathname.startsWith('/metrics/'),
+      async (route) => {
+        const request = route.request();
+        const url = new URL(request.url());
+        let reply: Reply;
+
+        if (request.method() === 'POST' && url.pathname === '/metrics') {
+          const { dois } = request.postDataJSON() as { dois: string[] };
+          this.calls.push(dois);
+          reply = this.handler(dois);
+        } else {
+          this.unexpected.push(`${request.method()} ${url.pathname}`);
+          reply = { status: 404, body: { message: 'Not mocked' } };
+        }
+
+        await route.fulfill({
+          status: reply.status ?? 200,
+          headers: reply.headers,
+          contentType: 'application/json',
+          body: JSON.stringify(reply.body ?? {}),
+        });
+      },
+    );
+  }
+}
+
+/**
+ * `test` with `core`, `ai` and `metrics` fixtures: all three are mocked before
+ * the page loads anything, so no test can reach a real service.
+ */
+export const test = base.extend<{ core: MockCore; ai: MockAi; metrics: MockMetrics }>({
   core: [
     async ({ page }, use) => {
       const core = new MockCore();
@@ -145,6 +189,15 @@ export const test = base.extend<{ core: MockCore; ai: MockAi }>({
       await ai.install(page);
       await use(ai);
       expect(ai.unexpected, 'requests to /ai/ that the mock does not cover').toEqual([]);
+    },
+    { auto: true },
+  ],
+  metrics: [
+    async ({ page }, use) => {
+      const metrics = new MockMetrics();
+      await metrics.install(page);
+      await use(metrics);
+      expect(metrics.unexpected, 'requests to /metrics that the mock does not cover').toEqual([]);
     },
     { auto: true },
   ],

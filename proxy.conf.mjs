@@ -43,4 +43,10 @@ export default {
     changeOrigin: true,
     secure: true,
   },
+  // Citation metrics (worker/paper-metrics.js) likewise come from the deployed Worker.
+  '/metrics': {
+    target: 'https://mini-cypris.cadetsummers.workers.dev',
+    changeOrigin: true,
+    secure: true,
+  },
 };

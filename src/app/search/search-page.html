@@ -135,10 +135,63 @@
           </p>
         </div>
 
+        <div class="impact">
+          @if (withMetrics()) {
+            <label for="sort">Sort loaded papers by</label>
+            <select id="sort" (change)="onSortChange($event)">
+              <option value="relevance" [selected]="sortBy() === 'relevance'">Relevance</option>
+              <option value="citations" [selected]="sortBy() === 'citations'">Citations</option>
+              <option value="fwci" [selected]="sortBy() === 'fwci'">FWCI</option>
+            </select>
+          }
+          <p class="impact-note" aria-live="polite">
+            @if (withMetrics()) {
+              Citation data for {{ withMetrics() | number }} of
+              {{ store.papers().length | number }} loaded papers, from OpenAlex and NIH iCite.
+            } @else if (metrics.unavailable()) {
+              Citation metrics are unavailable right now.
+            } @else {
+              No citation data for these papers. It is matched by DOI, which most of them lack.
+            }
+          </p>
+          @if (withMetrics()) {
+            <details class="impact-help">
+              <summary>What do these numbers mean?</summary>
+              <ul>
+                <li><strong>Citations</strong>: times the paper has been cited.</li>
+                <li>
+                  <strong>FWCI</strong> (Field-Weighted Citation Impact): citations compared with
+                  papers of the same field, year and type. 1.00 is average; 2.00 is twice the
+                  average.
+                </li>
+                <li>
+                  <strong>RCR</strong> (Relative Citation Ratio, from the NIH): citations per year
+                  compared with NIH-funded papers in the same field. 1.00 is the median. Only papers
+                  in PubMed have one.
+                </li>
+                <li>
+                  <strong>h-index</strong>: an h-index of 20 means 20 papers cited at least 20 times
+                  each. The author figure is the higher of the first and last author.
+                </li>
+              </ul>
+              <p>
+                Papers are matched by DOI, so a paper without a DOI shows no numbers. Sorting
+                reorders the loaded papers only, and puts papers without data last.
+              </p>
+            </details>
+          }
+        </div>
+
         @if (visiblePapers().length) {
           <ul class="paper-list">
             @for (paper of visiblePapers(); track paper.id) {
-              <li><app-paper-card [paper]="paper" [highlight]="highlight()" /></li>
+              <li>
+                <app-paper-card
+                  [paper]="paper"
+                  [highlight]="highlight()"
+                  [metrics]="metrics.for(paper)"
+                />
+              </li>
             }
           </ul>
 

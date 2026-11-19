@@ -1,4 +1,4 @@
-// A stand-in for CORE, and for the language model, that the Worker talks to
+// A stand-in for CORE, the language model, OpenAlex and NIH iCite that the Worker talks to
 // during the routing tests.
 // Started by playwright.worker.config.ts; run by Node directly (it strips the types).
 //
@@ -52,6 +52,20 @@ const server = createServer((request, response) => {
       response: { ok: true, queries: ['drone AND delivery AND yearPublished>2000'], reason: '' },
     });
   }
+  // OpenAlex and NIH iCite, which the Worker asks for citation metrics (see
+  // worker/paper-metrics.js). Only the first fixture paper is known to them.
+  if (request.method === 'GET' && url.pathname === '/works') {
+    const asked = (url.searchParams.get('filter') ?? '').includes('10.0000/example.1|');
+    return send(200, {
+      results: asked
+        ? [{ doi: 'https://doi.org/10.0000/example.1', cited_by_count: 136, fwci: 12.41 }]
+        : [],
+    });
+  }
+  if (request.method === 'GET' && ['/authors', '/sources', '/publishers'].includes(url.pathname)) {
+    return send(200, { results: [] });
+  }
+  if (request.method === 'GET' && url.pathname === '/api/pubs') return send(200, { data: [] });
   return send(404, { message: 'The fake CORE does not serve this path.' });
 });
 

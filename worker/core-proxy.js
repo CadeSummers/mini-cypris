@@ -9,6 +9,7 @@
 
 import { DurableObject } from 'cloudflare:workers';
 import { handleAiQuery } from './ai-query.js';
+import { handlePaperMetrics } from './paper-metrics.js';
 
 const CORE_ORIGIN = 'https://api.core.ac.uk';
 
@@ -224,6 +225,9 @@ export default {
     const url = new URL(request.url);
     if (url.pathname.startsWith('/core-api/')) {
       return proxyToCore(request, url, env, ctx);
+    }
+    if (url.pathname === '/metrics' || url.pathname.startsWith('/metrics/')) {
+      return handlePaperMetrics(request, url, env, ctx, { takeVisitorSlot, visitorLimitResponse });
     }
     if (url.pathname.startsWith('/ai/')) {
       return handleAiQuery(request, url, env, ctx, {

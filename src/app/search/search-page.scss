@@ -168,3 +168,49 @@
 .more-error {
   margin-top: 1rem;
 }
+
+.impact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  margin: 0.75rem 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+
+  label {
+    font-weight: 600;
+  }
+
+  select {
+    height: 2rem;
+    padding: 0 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+  }
+}
+
+.impact-note {
+  margin: 0;
+}
+
+.impact-help {
+  flex-basis: 100%;
+
+  summary {
+    color: var(--accent-strong);
+    cursor: pointer;
+  }
+
+  ul {
+    margin: 0.4rem 0;
+    padding-left: 1.2rem;
+  }
+
+  p {
+    margin: 0.4rem 0 0;
+  }
+}

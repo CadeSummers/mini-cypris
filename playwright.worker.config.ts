@@ -33,6 +33,8 @@ const wrangler = [
   '--ip 127.0.0.1',
   `--var CORE_API_ORIGIN:http://127.0.0.1:${CORE_PORT}`,
   `--var AI_ORIGIN:http://127.0.0.1:${CORE_PORT}`,
+  `--var OPENALEX_ORIGIN:http://127.0.0.1:${CORE_PORT}`,
+  `--var ICITE_ORIGIN:http://127.0.0.1:${CORE_PORT}`,
   `--var CORE_API_KEY:${TEST_KEY}`,
   `--persist-to "${state}"`,
   '--show-interactive-dev-session=false',

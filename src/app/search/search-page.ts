@@ -1,9 +1,17 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, inject, linkedSignal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  linkedSignal,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import { cleanCategoryLabel } from '../chart/category-series';
 import { ChartPanel } from '../chart/chart-panel';
+import { PaperMetricsStore, PaperSort, sortPapers } from '../metrics/paper-metrics';
 import { parseQuery } from './boolean-query';
 import { PaperCard } from './paper-card';
 import { PlainEnglishBar } from './plain-english-bar';
@@ -51,6 +59,7 @@ export function paramsFromRequest(request: SearchRequest): Record<string, string
 })
 export class SearchPage {
   protected readonly store = inject(SearchStore);
+  protected readonly metrics = inject(PaperMetricsStore);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
 
@@ -109,14 +118,33 @@ export class SearchPage {
     return collectHighlightTerms(search?.ok ? search.ast : null, refine?.ok ? refine.ast : null);
   });
 
-  /** While the filter is incomplete or invalid, keep showing everything. */
+  /** How the loaded papers are ordered; a new query goes back to CORE's own order. */
+  protected readonly sortBy = linkedSignal<string | undefined, PaperSort>({
+    source: () => this.store.request()?.query,
+    computation: () => 'relevance',
+  });
+
+  /** How many of the loaded papers have citation metrics. */
+  protected readonly withMetrics = computed(
+    () => this.store.papers().filter((paper) => this.metrics.for(paper) !== null).length,
+  );
+
+  /**
+   * The papers to list: filtered by the refine box (while it is incomplete or
+   * invalid, everything is shown), then put in the chosen order.
+   */
   protected readonly visiblePapers = computed(() => {
     const refine = this.refine();
     const papers = this.store.papers();
-    return refine?.ok ? filterPapers(papers, refine.ast) : papers;
+    const matching = refine?.ok ? filterPapers(papers, refine.ast) : papers;
+    return sortPapers(matching, this.sortBy(), (paper) => this.metrics.for(paper));
   });
 
   constructor() {
+    // Papers are shown as soon as CORE answers; their citation metrics are
+    // asked for afterwards and fill in when they arrive.
+    effect(() => this.metrics.ensure(this.store.papers()));
+
     // The URL is the source of truth for the search. User actions only change
     // the URL; this subscription turns each URL into a search. That makes
     // searches shareable and gives working back/forward buttons for free.
@@ -155,6 +183,10 @@ export class SearchPage {
   protected onTypeSelected(documentType: string | null): void {
     const current = this.store.request();
     if (current) this.navigate({ ...current, documentType });
+  }
+
+  protected onSortChange(event: Event): void {
+    this.sortBy.set((event.target as HTMLSelectElement).value as PaperSort);
   }
 
   protected onRefineInput(event: Event): void {

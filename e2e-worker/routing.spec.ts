@@ -83,6 +83,24 @@ test('a plain-English question goes through the Worker to the model and runs a s
   expect(other.headers()['content-type']).toContain('application/json');
 });
 
+test('citation metrics go through the Worker and appear on the paper they belong to', async ({
+  page,
+  request,
+}) => {
+  const looked = page.waitForResponse((response) => response.url().endsWith('/metrics'));
+  await page.goto('/?q=drone%20AND%20delivery');
+
+  expect((await looked).status()).toBe(200);
+  const cards = page.getByRole('article');
+  await expect(cards.first().locator('.metric')).toHaveText([/Citations\s*136/, /FWCI\s*12\.41/]);
+  await expect(cards.nth(1).locator('.metric')).toHaveCount(0);
+
+  // /metrics paths belong to the Worker: a wrong one is refused, not answered with the app.
+  const other = await request.get('/metrics/works');
+  expect(other.status()).toBe(404);
+  expect(other.headers()['content-type']).toContain('application/json');
+});
+
 test('API paths always reach the Worker and never fall back to the app', async ({ request }) => {
   const before = (await coreCalls(request)).length;
 

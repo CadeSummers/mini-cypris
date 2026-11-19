@@ -108,3 +108,29 @@ mark {
   background: var(--highlight-bg);
   color: inherit;
 }
+
+.metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.1rem;
+  margin: 0.75rem 0 0;
+  padding: 0.5rem 0.7rem;
+  border-radius: var(--radius);
+  background: var(--bg);
+  font-size: 0.82rem;
+}
+
+.metric {
+  display: flex;
+  gap: 0.35rem;
+  cursor: help;
+
+  dt {
+    color: var(--text-muted);
+  }
+
+  dd {
+    margin: 0;
+    font-weight: 600;
+  }
+}
