@@ -183,6 +183,10 @@ Mapped to the steps in the project brief:
     table" that sets each name's paper count beside citation context from the loaded papers:
     how many of them carry the name, their citations added up, and the h-index. A name that
     no loaded paper carries shows a dash. See `Design_Decisions.md` 9c.
+24. **Home link.** The Cypris logo and the name at the top left are one link back to the
+    empty start page.
+25. **Light and dark theme.** A sun and moon switch at the top right. The page follows the
+    device setting until a choice is made, then remembers it. See `Design_Decisions.md` 8a.
 
 ## Project layout
 
@@ -193,6 +197,7 @@ src/app/
                 query fixes, the plain-English box and the suggestions
   ai/           client for the app's own /ai/query endpoint
   metrics/      citation metrics for the loaded papers, and sorting by them
+  theme/        the light or dark palette choice
   chart/        year chart, ranked top-ten chart, the switcher, and the pure functions behind them
 proxy.conf.mjs  dev-server proxy that adds the API key (and forwards /ai and /metrics to the deployed Worker)
 worker/         the same proxy as a Cloudflare Worker, the plain-English and citation

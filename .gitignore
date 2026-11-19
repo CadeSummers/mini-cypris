@@ -43,6 +43,9 @@ __screenshots__/
 .DS_Store
 Thumbs.db
 
+# Claude Code session files (handoffs, local settings)
+.claude/
+
 # Local-only material (assessment brief, notes) and secrets
 /project_context/
 .env

@@ -42,7 +42,7 @@ h2 {
 
     &[aria-pressed='true'] {
       background: var(--accent);
-      color: #fff;
+      color: var(--on-accent);
     }
   }
 }

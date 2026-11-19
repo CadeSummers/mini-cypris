@@ -1,7 +1,34 @@
 <header class="site-header">
   <div class="wrap">
-    <h1 class="brand">Mini-Cypris</h1>
+    <h1 class="brand">
+      <!-- A plain link, not a router link: loading "/" afresh clears every piece of state. -->
+      <a href="/" aria-label="Mini-Cypris: back to the start">
+        <img src="cypris-logo.jpg" alt="" width="28" height="29" />
+        <span>Mini-Cypris</span>
+      </a>
+    </h1>
     <span class="tagline">Search open-access research papers from CORE</span>
+
+    <button
+      type="button"
+      class="theme-switch"
+      role="switch"
+      aria-label="Dark mode"
+      [attr.aria-checked]="theme.theme() === 'dark'"
+      [title]="theme.theme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
+      (click)="theme.toggle()"
+    >
+      <span class="thumb" aria-hidden="true"></span>
+      <svg class="icon sun" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="4" />
+        <path
+          d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"
+        />
+      </svg>
+      <svg class="icon moon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />
+      </svg>
+    </button>
   </div>
 </header>
 

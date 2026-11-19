@@ -12,8 +12,28 @@
   --warn-bg: #fff6e0;
   --highlight-bg: #ffe9a8;
   --warn-text: #7a5200;
+  /* Text on an accent-coloured background. */
+  --on-accent: #ffffff;
   --radius: 10px;
   color-scheme: light;
+}
+
+/* Dark palette. ThemeStore sets the attribute; every colour above has a counterpart here. */
+:root[data-theme='dark'] {
+  --bg: #0f1420;
+  --surface: #181f2e;
+  --border: #2c3648;
+  --text: #e6e9f0;
+  --text-muted: #a3adc2;
+  --accent: #8aa4ff;
+  --accent-strong: #a9bcff;
+  --accent-faded: #34437a;
+  --danger: #ff8a80;
+  --warn-bg: #3a2e10;
+  --highlight-bg: #4d3b00;
+  --warn-text: #f2cf7a;
+  --on-accent: #0f1420;
+  color-scheme: dark;
 }
 
 *,

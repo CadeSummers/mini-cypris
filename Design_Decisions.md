@@ -844,6 +844,48 @@ typed, actionable messages. A failed "load more" keeps the papers already shown.
 
 ---
 
+### 8a. Header: home link and light or dark theme
+
+_Brief step 8 (additions)._
+
+**Decision.** The Cypris logo and the name "Mini-Cypris" sit at the top left as one link back
+to the empty start page. At the top right, a switch with a sun and a moon changes between a
+light and a dark palette.
+
+**Why.**
+
+- **One link, not two.** Logo and name share one target, one hover and one focus ring, and a
+  screen reader announces one link. The logo's alt text is empty because the name beside it
+  already says what it is.
+- **The link reloads the page at `/` instead of navigating inside the app.** "Back to the
+  start" should clear everything: the query, the year and type filters, the refine box, the
+  sort order, the chart view and the plain-English box. A reload does that with no list of
+  things to remember to reset. The price is one page load of a small app.
+- **The theme is a set of design tokens.** Every colour was already a CSS variable in
+  `src/styles.scss`, so dark mode is a second set of values under
+  `:root[data-theme='dark']`. No component has its own dark rules.
+- **The device setting is the default; a choice is remembered.** With nothing saved the page
+  follows `prefers-color-scheme`. Using the switch saves the choice in `localStorage`.
+- **No flash of the wrong theme.** A few lines of script in `index.html` set the theme
+  before the first paint, ahead of Angular starting.
+- **It is a real switch for assistive technology:** `role="switch"`, named "Dark mode",
+  with `aria-checked`. The sun and moon are decoration.
+- **The year chart is recoloured.** Chart.js draws on a canvas and cannot read CSS variables
+  by itself, so the chart re-reads the tokens when the theme changes.
+
+**Checked.** The automated accessibility scan runs on a page of results in dark mode as well
+as light. It caught highlighted words in titles falling below the contrast minimum, and the
+dark highlight colour was darkened to fix it.
+
+**Trade-offs, stated plainly.**
+
+- **The logo file is a small JPEG (63 by 66 pixels) with its own dark background.** It is
+  shown at 28 pixels, where that is enough. A vector logo would be sharper on large screens.
+- **The theme key appears twice,** in `src/index.html` and in `src/app/theme/theme.ts`, because
+  the early script cannot import from the app.
+- **There is no third "follow my device" position.** Once a visitor uses the switch, their
+  choice wins until they clear site data. Two positions keep the control obvious.
+
 ## 9. The chart
 
 _Brief step 6: "The chart should aggregate data from all papers that match a given query. You

@@ -13,6 +13,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { BarController, BarElement, CategoryScale, Chart, LinearScale, Tooltip } from 'chart.js';
+import { ThemeStore } from '../theme/theme';
 import { YearSeries, recentPoints } from './year-series';
 
 // Register only what a bar chart needs, rather than Chart.js's `registerables`,
@@ -46,6 +47,7 @@ export class YearChart {
   protected readonly recentSpan = RECENT_SPAN;
   protected readonly showAll = signal(false);
 
+  private readonly theme = inject(ThemeStore);
   private readonly canvas = viewChild.required<ElementRef<HTMLCanvasElement>>('canvas');
   private chart?: Chart<'bar', number[], string>;
 
@@ -80,6 +82,8 @@ export class YearChart {
     effect(() => {
       const points = this.points();
       const selected = this.selectedYear();
+      // Read here so the chart is recoloured when the theme changes.
+      this.theme.theme();
       const labels = points.map((point) => String(point.year));
       const data = points.map((point) => point.count);
 
@@ -90,6 +94,7 @@ export class YearChart {
         this.chart.data.labels = labels;
         this.chart.data.datasets[0].data = data;
       }
+      this.applyColors(this.chart);
       // With a year selected, the other bars fade so the selection stands out.
       this.chart.data.datasets[0].backgroundColor = points.map((point) =>
         selected === null || point.year === selected ? this.colors.accent : this.colors.faded,
@@ -107,15 +112,22 @@ export class YearChart {
 
   private colors = { accent: '#2f5bea', faded: '#c3cff8' };
 
-  private createChart(canvas: HTMLCanvasElement, labels: string[], data: number[]) {
-    const styles = getComputedStyle(canvas);
+  /** Takes the chart's colours from the design tokens of the current theme. */
+  private applyColors(chart: Chart<'bar', number[], string>): void {
+    const styles = getComputedStyle(chart.canvas);
     const muted = styles.getPropertyValue('--text-muted').trim() || '#5b6475';
     const grid = styles.getPropertyValue('--border').trim() || '#e1e5ec';
     this.colors = {
       accent: styles.getPropertyValue('--accent').trim() || this.colors.accent,
       faded: styles.getPropertyValue('--accent-faded').trim() || this.colors.faded,
     };
+    const { x, y } = chart.options.scales ?? {};
+    if (x?.ticks) x.ticks.color = muted;
+    if (y?.ticks) y.ticks.color = muted;
+    if (y?.grid) y.grid.color = grid;
+  }
 
+  private createChart(canvas: HTMLCanvasElement, labels: string[], data: number[]) {
     return new Chart(canvas, {
       type: 'bar',
       data: {
@@ -149,11 +161,11 @@ export class YearChart {
           },
         },
         scales: {
-          x: { grid: { display: false }, ticks: { color: muted, maxRotation: 0, autoSkip: true } },
+          x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true } },
           y: {
             beginAtZero: true,
-            grid: { color: grid },
-            ticks: { color: muted, precision: 0 },
+            grid: {},
+            ticks: { precision: 0 },
           },
         },
       },
