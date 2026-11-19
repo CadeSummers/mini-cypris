@@ -66,7 +66,8 @@ shapes. It returns a clean `Paper` model, not CORE's raw objects.
 _Brief steps 4 and 5 (searching "efficiently")._
 
 **Decision.** A `SearchStore` service holds the search state as signals. Requests go through
-an RxJS stream using `switchMap`. Results are cached in memory by query, page size and year.
+an RxJS stream using `switchMap`. Results are cached in memory by query, page size and chart selections (year, document type,
+publisher, author).
 
 **Why.**
 
@@ -98,8 +99,8 @@ an RxJS stream using `switchMap`. Results are cached in memory by query, page si
 _Brief step 7 (public repo), step 2._
 
 **Decision.** The browser calls `/core-api/...`. The dev server proxies that to
-`api.core.ac.uk` and adds the key from a git-ignored `.env` file. The app also works with no
-key at all.
+`api.core.ac.uk` and adds the key from a git-ignored `.env` file. With no key the app still
+starts and sends its requests anonymously, but CORE refuses most of them (see below).
 
 **Why.**
 
@@ -109,7 +110,11 @@ key at all.
 - It mirrors how a real product works: the front end talks to its own backend, which holds
   the credentials for upstream services.
 - It avoids depending on CORE's CORS behaviour for the `POST` aggregate request.
-- A reviewer can clone and run without requesting a key.
+- **A key is needed in practice.** I first wrote here that a reviewer could clone and run
+  without one. Tested from a fresh clone on 2026-11-19, that is not so: CORE refused the first
+  anonymous search (429, with a ten-minute wait), and after the wait it answered the chart's
+  counts and refused the papers. The app shows its rate-limit message with the retry time,
+  the README now says to add a free key first, and the live demo needs no setup.
 
 **Deployment: a Cloudflare Worker.** A static build has no dev server, so the deployed site
 needs something doing the proxy's job. `worker/core-proxy.js` is that: one Worker, mounted at
@@ -237,7 +242,7 @@ passed 8 requests and refused the 9th, and a search already in the cache was sti
 
 _Brief step 2 (use the API responsibly), step 7 ("working" at each stage), step 8 (additions)._
 
-**Decision.** 12 tests in `worker/core-proxy.test.mjs` (the 16 for plain-English search are
+**Decision.** 12 tests in `worker/core-proxy.test.mjs` (the 22 for plain-English search are
 described in 7b, the 12 for citation metrics in 5b) run the real Worker in Cloudflare's
 runtime on my machine and in CI, with CORE replaced by a fake. They use Miniflare (the
 engine inside `wrangler dev`) as a library and Node's built-in test runner. Run them with
@@ -328,7 +333,7 @@ dev server with CORE mocked in the browser, so the Worker is never involved. The
 tests (4b) call the Worker directly, so the app and the routing rules are never involved.
 A wrong pattern in `run_worker_first` would pass both and break the deployed site. I
 confirmed this: changing the pattern to `/api/*` left every other suite green and failed
-four of these six tests.
+four of the six tests the suite had at the time.
 
 **The one change to production code.** The Worker reads an optional `CORE_API_ORIGIN`
 variable and otherwise uses the real CORE address. `wrangler dev` has no way to intercept a
@@ -511,11 +516,16 @@ journal h-index 792 and publisher h-index 2,530.
   count instead of hiding it.
 - **The deployed site needs an OpenAlex key to show metrics.** Without a key OpenAlex gives
   $0.10 a day shared by everyone on the same IP address, and Cloudflare Workers share
-  addresses. On the deployed site the first request was refused (429), while the same code
-  ran from a home connection. Until a key is added as the `OPENALEX_API_KEY` secret, the
-  site says "Citation metrics are unavailable right now" and is otherwise unaffected. A free
-  key has its own $1 a day; at up to four requests per search that is about 2,500 searches,
-  estimated.
+  addresses. On the deployed site the first keyless request was refused (429), while the same
+  code ran from a home connection. A free key was added as the `OPENALEX_API_KEY` secret on
+  2026-11-19 and the live site has shown metrics since (13 of 50 papers for
+  `drone AND delivery`). The key has its own $1 a day; at up to four requests per search that
+  is about 2,500 searches, estimated. If it runs out, the site says "Citation metrics are
+  unavailable right now" and is otherwise unaffected.
+- **Setting that secret went wrong twice.** Pasting the key at Wrangler's prompt stored an
+  empty value while reporting success, so the Worker kept calling OpenAlex without a key.
+  Piping the value in (`printf '%s' '<key>' | npx wrangler secret put OPENALEX_API_KEY`)
+  worked. The sign was OpenAlex's own usage report showing almost no requests against the key.
 - **These are OpenAlex's figures.** Its FWCI is calculated from OpenAlex's own data and
   fields, so it will differ from Scopus's. Its h-index will differ from Google Scholar's.
 - **RCR appears only on PubMed-indexed papers,** so mostly on biomedical work.
@@ -632,7 +642,7 @@ trouble (500)". I traced it to CORE, not to the app:
 
 CORE fails when every term is a quoted single word, and when a field name does not exist.
 Its message says its search backend answered 400 ("... is not a searchable field"), which
-CORE then reports as a 500.
+CORE then reports as a 500. (`author:` no longer reaches CORE under that name; see point 4.)
 
 **Decision.**
 
@@ -841,8 +851,8 @@ refused as unclear, fixed by adding a question to the prompt's examples.
 fake model, mostly to make the model misbehave: prose, unknown fields, wrong types, a reply
 that is not JSON. Each must come out as a refusal code. To prove the tests would notice, I
 switched the query check off by hand once: two tests failed, and I switched it back on.
-Browser tests cover the box, its four messages and the reload case; a routing test covers
-the path through the Worker.
+Browser tests cover the box, each of its messages, the disclosure note and the reload case;
+a routing test covers the path through the Worker.
 
 ### 7c. Spelling corrections and related searches
 
@@ -869,13 +879,16 @@ costs is under "Trade-offs" below.
   search has settled, so the model call starts after the results are shown. A slow or failed
   model call changes one line under the result count and nothing else.
 - **One call per query, not per page.** The request depends on the query alone. Choosing a
-  year or type, changing the number of papers, or "Load more" asks nothing new, and a
+  year, type, publisher or author, changing the number of papers, or "Load more" asks
+  nothing new, and a
   repeated query is answered from the Worker's 24-hour cache without reaching the model.
 - **A failed search gets the same help as an empty one.** CORE answers some queries with a
   server error instead of an empty list (7a), and a query the model wrote can be one of
   them. The page then says "No papers found", says that CORE returned an error and which,
   and offers the correction and similar searches. Before, it showed "CORE is having trouble
-  (500)" and nothing to do next.
+  (500)" and nothing to do next. Seen on the live site on 2026-11-19 with
+  `drone AND fullText:delivry`: CORE answered 500 to both requests, and the page showed "No
+  papers found" with two similar searches under it.
 - **Not for every error.** A rate limit, a lost connection or a rejected key would stop any
   other query too, so those keep their own messages and offer no suggestions.
 - **CORE has no "did you mean" of its own,** so a model is the only practical source.
@@ -902,8 +915,8 @@ more. Any other model failure is still "unavailable", with no time, because none
   `"mashine learning" AND protien AND yearPublished>2019` by dropping the first term. The
   Worker now rejects a correction whose number of terms differs from the original.
 - **A suggestion identical to the query is dropped,** as are duplicates.
-- **No correction is requested when a year or type filter is on.** The filter is the likelier
-  cause of the empty list.
+- **No correction is requested when a chart selection is on** (a year, type, publisher or
+  author). The selection is the likelier cause of the empty list.
 - **No search runs by itself.** A wrong suggestion costs a glance, not a search.
 - **Silence when there is nothing to add.** If the model has no related searches and papers
   are on screen, nothing is shown.
@@ -924,8 +937,13 @@ more. Any other model failure is still "unavailable", with no time, because none
 - **The wait is worked out once,** when the notice appears, and does not count down. The
   clock time beside it stays right.
 - **The two Cloudflare errors are recognised by their code and wording,** taken from
-  Cloudflare's error reference. I have not seen either happen on the live site. If Cloudflare
-  changes them, the page falls back to "unavailable".
+  Cloudflare's error reference. I have not seen either happen on the live site, and did not
+  provoke them: using up the day's allowance on purpose would switch the feature off for
+  every visitor until midnight UTC. If Cloudflare changes them, the page falls back to
+  "unavailable".
+- **The per-visitor limit has been seen on the live site** (2026-11-19): fifteen new calls
+  passed, the sixteenth was refused, the page showed the notice with "about 20 seconds" and
+  the clock time, and "Try again" brought the suggestions back once that time had passed.
 - **A suggestion is not checked against CORE before it is shown,** so "Did you mean" can lead
   to another empty list. Checking would spend the shared CORE allowance on every typo.
 - **The model's idea of "related" is general knowledge,** not CORE's contents.
@@ -953,7 +971,8 @@ typed, actionable messages. A failed "load more" keeps the papers already shown.
 **Why.**
 
 - Each failure has a different remedy: wait (rate limit), fix the query (400), fix the key
-  (401/403), retry (5xx), check the connection (offline). One generic message hides that.
+  (401/403), try again or try a suggested search (5xx, see 7c), check the connection
+  (offline). One generic message hides that.
 - On a rate limit the app reads CORE's `x-ratelimit-retry-after` header and shows the time at
   which searching will work again.
 - Skeleton cards keep the layout stable while the first search loads, and respect
@@ -988,8 +1007,8 @@ light and a dark palette.
   screen reader announces one link. The logo's alt text is empty because the name beside it
   already says what it is.
 - **The link reloads the page at `/` instead of navigating inside the app.** "Back to the
-  start" should clear everything: the query, the year and type filters, the refine box, the
-  sort order, the chart view and the plain-English box. A reload does that with no list of
+  start" should clear everything: the query, the chart selections, the refine box, the sort
+  order, the chart view and the plain-English box. A reload does that with no list of
   things to remember to reset. The price is one page load of a small app.
 - **The theme is a set of design tokens.** Every colour was already a CSS variable in
   `src/styles.scss`, so dark mode is a second set of values under
@@ -1122,13 +1141,14 @@ counted by CORE over every matching paper.
 
 ---
 
-### 9b. Drill-down from the document type chart
+### 9b. Drill-down from the ranked charts
 
 _Brief step 6 (the chart), step 8 (additions)._
 
-**Decision.** In the "Document type" view, each type's name is a button. Clicking "Thesis"
-lists only the theses that match the query. The choice is shown as a removable chip, lives
-in the URL (`type=thesis`), and combines with a year chosen from the year chart.
+**Decision, as first built (document types only).** In the "Document type" view, each type's
+name is a button. Clicking "Thesis" lists only the theses that match the query. The choice
+is shown as a removable chip, lives in the URL (`type=thesis`), and combines with a year
+chosen from the year chart.
 
 **Extended on 2026-11-19 to publishers and authors, and to the bars themselves.** Every
 ranked chart now filters on a click, like the year chart: the name is the button, and the
@@ -1159,19 +1179,19 @@ measurements (live CORE, `drone AND delivery`):
 
 **Why.**
 
-- **It is the one extra field where the click is honest.** For this field CORE's filter
-  returns exactly the number on the bar. I checked it again in the finished app against the
-  real CORE: the "Research article" bar said 8,976, and the list it opened said "10 of
-  8,976".
+- **Document type came first because its click is exact.** For this field CORE's filter
+  returns exactly the number on the bar. I checked it in the finished app against the real
+  CORE: the "Research article" bar said 8,976, and the list it opened said "10 of 8,976".
+  Publishers and authors followed once the measurements above showed how close they are.
 - **It follows the year drill-down exactly,** so there is one idea to learn: the selection
   narrows the list, the chart keeps showing the whole query for context, the counts are not
   fetched again, and clicking the selection again (or its chip) removes it.
 - **The filter is added to the query, not applied in the browser:**
   `(query) AND documentType:"thesis"`. A browser-side filter would only see the papers
   already loaded.
-- **Year and type combine with AND.** They are independent questions ("which year?", "what
-  kind?"), and one list answering both is more useful than making the second choice cancel
-  the first.
+- **Selections combine with AND.** They are independent questions ("which year?", "what
+  kind?", "from whom?"), and one list answering all of them is more useful than making a
+  later choice cancel an earlier one.
 - **The bar keeps CORE's exact value beside the tidied label.** The chart shows "Thesis"; CORE
   stores "thesis". `CategoryItem` now carries both, and the filter uses CORE's spelling.
 
@@ -1179,7 +1199,7 @@ measurements (live CORE, `drone AND delivery`):
 
 - **A bar made by merging several raw values cannot be picked** (its `value` is null),
   because no single filter would return its total.
-- **Types cannot be picked in the fallback** (when CORE's counts failed and the chart shows
+- **Nothing can be picked in the fallback** (when CORE's counts failed and the charts show
   only the loaded papers). The bar's number would not be the number of papers listed.
 - **The type in the URL is checked before use.** It is placed inside a quoted filter, so only
   letters, digits, spaces, hyphens and underscores are accepted. A hand-edited link cannot
@@ -1187,12 +1207,8 @@ measurements (live CORE, `drone AND delivery`):
 
 **Trade-offs, stated plainly.**
 
-- **With both a year and a type selected, neither chart shows the combined count.** Each
-  chart still describes the whole query. The combined total is in the status line above the
-  list.
-- **The type's name is the button, not the bar.** A name is a clear, focusable target with
-  text for a screen reader; the bar is decoration. The price is that clicking the bar itself
-  does nothing.
+- **With more than one selection, no chart shows the combined count.** Each chart still
+  describes the whole query. The combined total is in the status line above the list.
 - **`SearchRequest` now has four optional filters.** The three that are quoted phrases
   (type, publisher, author) are built from one small table in `search-store.ts`; the year is
   a number and stays separate.
@@ -1201,7 +1217,8 @@ measurements (live CORE, `drone AND delivery`):
   backslashes and control characters, and at most 200 characters. The same characters are
   removed again when the filter is built.
 - **The bar is a mouse-only shortcut,** like the bars of the year chart. The name beside it
-  is the button for the keyboard and for screen readers.
+  is the button for the keyboard and for screen readers: a clear, focusable target with text.
+  At first only the name could be clicked; the bar was added on 2026-11-19.
 
 **Alternatives.**
 
@@ -1265,7 +1282,8 @@ citations added up) and **h-index**.
 
 _Brief step 8 (extras), step 5 ("efficiently")._
 
-**Decision.** The search (`q`, `limit`, `year`) lives in the URL's query string, and the URL
+**Decision.** The search (`q`, `limit`, and the chart selections `year`, `type`, `publisher`
+and `author`) lives in the URL's query string, and the URL
 is the single source of truth: user actions change the URL, and the page turns each URL into
 a search. "Load more" appends the next page using CORE's `offset`.
 
@@ -1313,9 +1331,10 @@ error mapping and URL parsing. Prettier for formatting. Every commit builds and 
 _Brief step 7 ("working" at each stage), steps 3 to 6 (each feature has a test), step 8
 (additions)._
 
-**Decision.** 37 Playwright tests in `e2e/` drive the app in a real Chromium browser. CORE is
+**Decision.** 53 Playwright tests in `e2e/` drive the app in a real Chromium browser. CORE is
 replaced at the network boundary: `e2e/mock-core.ts` answers the two endpoints the app
-calls with made-up data, records every request, and fails the test if the app calls anything
+calls with made-up data (and, since they were added, stands in for the model and the
+citation metrics endpoint in the same way), records every request, and fails the test if the app calls anything
 else under `/core-api/`. They run with `npm run e2e` and as a second job in CI.
 
 **Why.**
@@ -1328,8 +1347,8 @@ else under `/core-api/`. They run with `npm run e2e` and as a second job in CI.
   (step 6) are each a named test.
 - **The mock sits at the network, not inside Angular.** The real `HttpClient`, router, store
   and components all run. The only thing replaced is CORE itself.
-- **Not the real CORE.** Real requests would spend the rate limit (20 tests make about 55
-  requests; the key allows about 10 a minute), need the key in CI, and fail whenever CORE is
+- **Not the real CORE.** Real requests would spend the rate limit (when the suite had 20
+  tests they made about 55 requests; the key allows about 10 a minute), need the key in CI, and fail whenever CORE is
   slow. They would also make it impossible to test a 429 or a 503 on demand.
 - **The tests assert on requests, not only on the screen.** "Refining does not ask CORE
   again" and "choosing a year does not refetch the counts" are claims about what is _not_
@@ -1337,8 +1356,8 @@ else under `/core-api/`. They run with `npm run e2e` and as a second job in CI.
 - **Elements are found the way a user finds them**, by role and label ("Boolean search",
   "Papers to fetch", the alert, "List papers from 2023"). No test ids were added to the app.
   If a label is removed, the test fails, which also protects accessibility.
-- **Two tests run axe**, an automated accessibility checker, on the empty page and on a page
-  of results.
+- **Three tests run axe**, an automated accessibility checker: on the empty page, on a page
+  of results, and on a page of results in the dark theme.
 
 **What the tests found.** The first run of the accessibility scan failed: the page had no
 level-one heading, because "Mini-Cypris" in the header was a plain `<span>`. It is now an
@@ -1377,14 +1396,15 @@ level-one heading, because "Mini-Cypris" in the header was a plain `<span>`. It 
 
 1. A global budget in the Worker on top of the per-visitor limit, so the app can queue or
    warn before CORE's own limit is hit.
-2. Exact publisher and author drill-down, if CORE exposes identifiers to filter on instead
-   of names.
+2. Exact publisher drill-down, if CORE exposes identifiers to filter on instead of names.
+   Today a one-word publisher name can list more papers than its bar (9b).
 3. Saved searches and export of results (CSV / BibTeX).
 4. A scheduled check of the deployed site (one real search a day), to notice if CORE changes
    its response format.
-5. Dark theme: colours are already CSS custom properties, so this is mostly a second palette.
+5. A setting to turn automatic suggestions off, for users who do not want their queries
+   sent to a third-party model (7c).
 6. For plain-English search: measure how many questions the free allowance really covers,
    keep a fixed set of test questions and re-run it whenever the prompt changes, and offer a
    model with a guaranteed US location for users who need one.
-7. For citation metrics: add the OpenAlex key to the deployed site, then consider matching
-   papers without a DOI by title and year with a strict similarity check.
+7. For citation metrics: match papers without a DOI by title and year, with a strict
+   similarity check, so more than a quarter of the cards can show figures.
