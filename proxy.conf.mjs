@@ -26,7 +26,7 @@ function readApiKey() {
  * two paths go to the deployed demo by default, so the app runs with no
  * Cloudflare account; they then count against the demo's limits. Set
  * WORKER_ORIGIN to send them elsewhere, for example to `npm run preview`
- * (http://localhost:8787).
+ * (http://localhost:8787, which needs a Cloudflare login for the model).
  */
 const workerOrigin =
   process.env.WORKER_ORIGIN?.trim() || 'https://mini-cypris.cadetsummers.workers.dev';

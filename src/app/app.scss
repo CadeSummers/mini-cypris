@@ -113,3 +113,21 @@
 main.wrap {
   padding-block: 1.5rem 4rem;
 }
+
+.site-footer {
+  margin-top: 2rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+
+  .wrap {
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+
+  a {
+    color: inherit;
+  }
+}
