@@ -11,6 +11,7 @@ import { collectHighlightTerms } from './highlight';
 import { filterPapers } from './paper-matcher';
 import { DEFAULT_LIMIT, SearchBar, clampLimit } from './search-bar';
 import { SearchRequest, SearchStore } from './search-store';
+import { Suggestions } from './suggestions';
 
 /** A document type from the URL is put inside a quoted filter, so keep it to plain words. */
 const SAFE_TYPE = /^[\w -]{1,40}$/;
@@ -42,7 +43,7 @@ export function paramsFromRequest(request: SearchRequest): Record<string, string
 
 @Component({
   selector: 'app-search-page',
-  imports: [DatePipe, DecimalPipe, PaperCard, PlainEnglishBar, SearchBar, ChartPanel],
+  imports: [DatePipe, DecimalPipe, PaperCard, PlainEnglishBar, SearchBar, ChartPanel, Suggestions],
   providers: [SearchStore],
   templateUrl: './search-page.html',
   styleUrl: './search-page.scss',
@@ -84,6 +85,20 @@ export class SearchPage {
   protected readonly typeLabel = computed(() => {
     const type = this.store.request()?.documentType;
     return type ? cleanCategoryLabel(type, 'documentType') || type : null;
+  });
+
+  /**
+   * True when the query itself found nothing. With a year or type selected, an
+   * empty list more likely means the filter is too narrow than a misspelling.
+   */
+  protected readonly noResults = computed(() => {
+    const request = this.store.request();
+    return (
+      this.store.status() === 'loaded' &&
+      this.store.totalHits() === 0 &&
+      !request?.year &&
+      !request?.documentType
+    );
   });
 
   /** Words to mark on the cards: from the CORE query and, if valid, the refine box. */

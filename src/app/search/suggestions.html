@@ -1,0 +1,46 @@
+<div class="suggestions" aria-live="polite">
+  @if (correction(); as corrected) {
+    <p>
+      Did you mean
+      <button type="button" class="chip" (click)="picked.emit(corrected)">{{ corrected }}</button>
+    </p>
+  }
+
+  @if (related(); as related) {
+    @if (related.outcome; as outcome) {
+      @switch (outcome.kind) {
+        @case ('queries') {
+          <p>
+            Related searches:
+            @for (query of outcome.queries; track query) {
+              <button type="button" class="chip" (click)="picked.emit(query)">{{ query }}</button>
+            }
+          </p>
+        }
+        @case ('refused') {
+          <p class="muted">No related searches to suggest for this query.</p>
+        }
+        @case ('limited') {
+          <p class="muted">
+            You have asked for several suggestions in a short time.
+            @if (outcome.retryAt; as retryAt) {
+              Try again at {{ retryAt | date: 'mediumTime' }}.
+            } @else {
+              Try again in a minute.
+            }
+          </p>
+        }
+        @case ('unavailable') {
+          <p class="muted">Suggestions are unavailable right now.</p>
+        }
+      }
+    } @else {
+      <p class="muted">Thinking of related searches…</p>
+    }
+  } @else {
+    <p>
+      <button type="button" class="ask" (click)="suggestRelated()">Suggest related searches</button>
+      <span class="muted">(written by an AI model)</span>
+    </p>
+  }
+</div>

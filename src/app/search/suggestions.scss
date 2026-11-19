@@ -1,0 +1,44 @@
+.suggestions {
+  margin: 0.5rem 0 0.75rem;
+  font-size: 0.9rem;
+
+  p {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0.35rem 0 0;
+  }
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.chip {
+  max-width: 100%;
+  padding: 0.2rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--accent-strong);
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 0.78rem;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--accent);
+  }
+}
+
+.ask {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-strong);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

@@ -52,6 +52,14 @@
     }
   </div>
 
+  @if (store.status() === 'loaded') {
+    <app-suggestions
+      [query]="store.request()?.query ?? ''"
+      [noResults]="noResults()"
+      (picked)="onQueryPicked($event)"
+    />
+  }
+
   @if (store.request()?.year || typeLabel()) {
     <p class="filters">
       @if (store.request()?.year; as year) {
