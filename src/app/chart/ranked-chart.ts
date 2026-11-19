@@ -2,7 +2,7 @@ import { DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { CategoryMetrics, categoryKey } from './category-metrics';
 import { CategorySeries, TOP_CATEGORIES } from './category-series';
-import { ChartSource } from './year-chart';
+import type { ChartSource } from './year-chart';
 
 /**
  * A ranked list of horizontal bars: the most common values of one field.

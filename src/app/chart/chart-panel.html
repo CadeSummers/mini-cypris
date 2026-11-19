@@ -11,15 +11,24 @@
   }
 </div>
 
-<!-- Hidden, not removed, so the year chart keeps its Chart.js instance and range choice. -->
-<app-year-chart
-  [hidden]="view() !== 'year'"
-  [series]="yearSeries()"
-  [source]="source()"
-  [loading]="loading()"
-  [selectedYear]="selectedYear()"
-  (yearSelected)="yearSelected.emit($event)"
-/>
+<!--
+  Chart.js is the largest dependency, so the year chart loads as its own file,
+  straight after the page appears, instead of holding the first paint back.
+  Hidden, not removed, so it keeps its Chart.js instance and range choice.
+-->
+<div [hidden]="view() !== 'year'">
+  @defer (on immediate) {
+    <app-year-chart
+      [series]="yearSeries()"
+      [source]="source()"
+      [loading]="loading()"
+      [selectedYear]="selectedYear()"
+      (yearSelected)="yearSelected.emit($event)"
+    />
+  } @placeholder {
+    <div class="year-placeholder" aria-hidden="true"></div>
+  }
+</div>
 
 @if (rankedText(); as text) {
   <app-ranked-chart

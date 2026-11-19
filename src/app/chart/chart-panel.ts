@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input, output, signal } f
 import { CategoryMetrics, MetricDimension } from './category-metrics';
 import { CategorySeries, Dimension } from './category-series';
 import { RankedChart } from './ranked-chart';
-import { ChartSource, YearChart } from './year-chart';
+import { type ChartSource, YearChart } from './year-chart';
 import { YearSeries } from './year-series';
 
 /** What the chart area is currently showing. */

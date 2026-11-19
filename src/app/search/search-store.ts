@@ -8,7 +8,7 @@ import {
   buildCategorySeries,
   countByDimension,
 } from '../chart/category-series';
-import { ChartSource } from '../chart/year-chart';
+import type { ChartSource } from '../chart/year-chart';
 import { YearSeries, buildYearSeries, countByYear } from '../chart/year-series';
 import { ApiError, toApiError } from '../core-api/api-error';
 import { CORE_AUTHOR_FIELD, normalizeForCore } from './query-fixes';

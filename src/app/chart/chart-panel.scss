@@ -47,3 +47,8 @@ button {
     color: var(--on-accent);
   }
 }
+
+// Holds roughly the height of the year chart's empty state while its code loads.
+.year-placeholder {
+  min-height: 120px;
+}
