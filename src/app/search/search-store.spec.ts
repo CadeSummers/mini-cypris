@@ -23,7 +23,7 @@ describe('toCoreQuery', () => {
 
   it('tidies the query for CORE without changing what the user typed', () => {
     const request = { query: '"abiogenesis" AND "exoplanet"', limit: 10, year: 2021 };
-    expect(toCoreQuery(request)).toBe('(abiogenesis AND exoplanet) AND yearPublished:2021');
+    expect(toCoreQuery(request)).toBe('abiogenesis AND exoplanet AND yearPublished:2021');
     expect(request.query).toBe('"abiogenesis" AND "exoplanet"');
   });
 
@@ -46,7 +46,7 @@ describe('toCoreQuery with a publisher or an author', () => {
 
   it('narrows to an author through the field CORE really searches', () => {
     expect(toCoreQuery({ query: 'a', limit: 10, author: 'Alkouz, Balsam' })).toBe(
-      '(a) AND authors/name:"Alkouz, Balsam"',
+      'a AND authors/name:"Alkouz, Balsam"',
     );
   });
 
@@ -70,13 +70,13 @@ describe('toCoreQuery with a publisher or an author', () => {
         author: 'Chen, Wei',
       }),
     ).toBe(
-      '(a) AND yearPublished:2021 AND documentType:"thesis" AND publisher:"MDPI AG" AND authors/name:"Chen, Wei"',
+      'a AND yearPublished:2021 AND documentType:"thesis" AND publisher:"MDPI AG" AND authors/name:"Chen, Wei"',
     );
   });
 
   it('cannot be broken out of by a name containing quotes or backslashes', () => {
     expect(toCoreQuery({ query: 'a', limit: 10, publisher: 'Evil" OR title:"x\\' })).toBe(
-      '(a) AND publisher:"Evil OR title: x"',
+      'a AND publisher:"Evil OR title: x"',
     );
   });
 
@@ -186,7 +186,7 @@ describe('SearchStore', () => {
 
     store.search({ query: 'drone', limit: 10, documentType: 'thesis' });
     const req = http.expectOne(isSearch);
-    expect(req.request.params.get('q')).toBe('(drone) AND documentType:"thesis"');
+    expect(req.request.params.get('q')).toBe('drone AND documentType:"thesis"');
     req.flush(page([2], 1));
 
     expect(store.papers().map((paper) => paper.id)).toEqual(['2']);

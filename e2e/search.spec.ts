@@ -3,6 +3,8 @@ import { searchResponse } from './fixtures';
 import { expect, test } from './mock-core';
 
 const QUERY = '(drone AND (package OR delivery))';
+// What CORE is sent for it: the outer parentheses make CORE count every "drone" paper.
+const SENT = 'drone AND (package OR delivery)';
 
 const queryBox = (page: Page) => page.getByLabel('Boolean search');
 const limitBox = (page: Page) => page.getByLabel('Papers to fetch');
@@ -22,7 +24,7 @@ test('a boolean search lists papers, the total, and highlights the query words',
 }) => {
   await runSearch(page);
 
-  expect(core.searches).toEqual([{ q: QUERY, limit: 10, offset: 0 }]);
+  expect(core.searches).toEqual([{ q: SENT, limit: 10, offset: 0 }]);
   await expect(page.getByRole('status')).toContainText('Showing 10 of 1,234 papers');
   await expect(page).toHaveURL(/[?&]q=/);
 
@@ -55,14 +57,14 @@ test('the number of papers to fetch is sent to CORE and clamped to 1-100', async
   await limitBox(page).fill('25');
   await limitBox(page).blur();
   await expect(cards(page)).toHaveCount(25);
-  expect(core.searches.at(-1)).toEqual({ q: QUERY, limit: 25, offset: 0 });
+  expect(core.searches.at(-1)).toEqual({ q: SENT, limit: 25, offset: 0 });
   await expect(page).toHaveURL(/limit=25/);
 
   await limitBox(page).fill('500');
   await limitBox(page).blur();
   await expect(limitBox(page)).toHaveValue('100');
   await expect(cards(page)).toHaveCount(100);
-  expect(core.searches.at(-1)).toEqual({ q: QUERY, limit: 100, offset: 0 });
+  expect(core.searches.at(-1)).toEqual({ q: SENT, limit: 100, offset: 0 });
 });
 
 test('an unbalanced query is explained and never sent', async ({ page, core }) => {
@@ -97,7 +99,7 @@ test('load more fetches the next page and appends it', async ({ page, core }) =>
 
   await expect(cards(page)).toHaveCount(20);
   await expect(page.getByRole('status')).toContainText('Showing 20 of 1,234 papers');
-  expect(core.searches.at(-1)).toEqual({ q: QUERY, limit: 10, offset: 10 });
+  expect(core.searches.at(-1)).toEqual({ q: SENT, limit: 10, offset: 10 });
 });
 
 test('no load-more button once every match is on screen', async ({ page, core }) => {
@@ -216,9 +218,8 @@ test('an author filter is sent to the field CORE really searches', async ({ page
 
 test('a wrong field name gets a one-click fix', async ({ page, core }) => {
   await page.goto('/');
-  await queryBox(page).fill('drone and year>=2020');
+  await queryBox(page).fill('drone AND year>=2020');
 
-  await page.getByRole('button', { name: 'Use AND' }).click();
   await page.getByRole('button', { name: 'Use yearPublished' }).click();
   await expect(queryBox(page)).toHaveValue('drone AND yearPublished>=2020');
   expect(core.searches).toEqual([]);

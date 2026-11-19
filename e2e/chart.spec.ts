@@ -42,7 +42,7 @@ test('choosing a year lists that year and keeps the chart on the whole query', a
   await expect(page.getByRole('status')).toContainText('published in 2023');
   await expect(page).toHaveURL(/year=2023/);
   expect(core.searches.at(-1)).toEqual({
-    q: `(${QUERY}) AND yearPublished:2023`,
+    q: `${QUERY} AND yearPublished:2023`,
     limit: 10,
     offset: 0,
   });
@@ -100,7 +100,7 @@ test('choosing a document type lists that type, and combines with a year', async
   await expect(thesis).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('status')).toContainText('of type Thesis');
   await expect(page).toHaveURL(/type=thesis/);
-  expect(core.searches.at(-1)?.q).toBe(`(${QUERY}) AND documentType:"thesis"`);
+  expect(core.searches.at(-1)?.q).toBe(`${QUERY} AND documentType:"thesis"`);
   expect(core.aggregates).toHaveLength(1);
 
   // A year chosen afterwards narrows the same list further.
@@ -108,14 +108,12 @@ test('choosing a document type lists that type, and combines with a year', async
   await yearChart(page).getByText('View as table').click();
   await page.getByRole('button', { name: 'List papers from 2023' }).click();
   await expect(cards(page)).toHaveCount(2);
-  expect(core.searches.at(-1)?.q).toBe(
-    `(${QUERY}) AND yearPublished:2023 AND documentType:"thesis"`,
-  );
+  expect(core.searches.at(-1)?.q).toBe(`${QUERY} AND yearPublished:2023 AND documentType:"thesis"`);
 
   // Removing the type keeps the year.
   await page.getByRole('button', { name: /Type: Thesis/ }).click();
   await expect(cards(page)).toHaveCount(10);
-  expect(core.searches.at(-1)?.q).toBe(`(${QUERY}) AND yearPublished:2023`);
+  expect(core.searches.at(-1)?.q).toBe(`${QUERY} AND yearPublished:2023`);
   await expect(page).not.toHaveURL(/type=/);
   await expect(page).toHaveURL(/year=2023/);
 });
@@ -133,7 +131,7 @@ test('choosing a publisher lists its papers, by its name or by its bar', async (
   await ranked.getByRole('listitem').nth(1).locator('.track').click();
   await expect(page).toHaveURL(/publisher=Logistics(\+|%20)Review/);
   await expect(page.getByRole('status')).toContainText('from publisher Logistics Review');
-  expect(core.searches.at(-1)?.q).toBe(`(${QUERY}) AND publisher:"Logistics Review"`);
+  expect(core.searches.at(-1)?.q).toBe(`${QUERY} AND publisher:"Logistics Review"`);
   await expect(
     ranked.getByRole('button', { name: 'List papers from publisher Logistics Review' }),
   ).toHaveAttribute('aria-pressed', 'true');
@@ -147,7 +145,7 @@ test('choosing a publisher lists its papers, by its name or by its bar', async (
     .click();
   await expect
     .poll(() => core.searches.at(-1)?.q)
-    .toBe(`(${QUERY}) AND publisher:"Aerial Systems Society"`);
+    .toBe(`${QUERY} AND publisher:"Aerial Systems Society"`);
   await page.getByRole('button', { name: /Publisher: Aerial Systems Society/ }).click();
   await expect(page).not.toHaveURL(/publisher=/);
   // The unfiltered list comes back from the app's own cache, with no new request.
@@ -169,7 +167,7 @@ test('choosing an author lists their papers, and combines with a year', async ({
   await expect(page.getByRole('status')).toContainText('by Rivera, Ana');
   // Sent to the field CORE really searches author names in.
   expect(core.searches.at(-1)?.q).toBe(
-    '(drone) AND yearPublished:2023 AND authors/name:"Rivera, Ana"',
+    'drone AND yearPublished:2023 AND authors/name:"Rivera, Ana"',
   );
 
   // Clicking the selected bar again removes the selection.
@@ -183,7 +181,7 @@ test('a shared link with a publisher and an author opens filtered', async ({ pag
   await expect(cards(page).first()).toBeVisible();
 
   expect(core.searches.at(-1)?.q).toBe(
-    '(drone) AND publisher:"Open Flight Press" AND authors/name:"Chen, Wei"',
+    'drone AND publisher:"Open Flight Press" AND authors/name:"Chen, Wei"',
   );
   await expect(page.getByRole('button', { name: /Publisher: Open Flight Press/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /Author: Chen, Wei/ })).toBeVisible();

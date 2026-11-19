@@ -8,7 +8,10 @@
  * stays valid. The parser only judges structure: parentheses, quotes and
  * operator placement.
  *
- * Grammar (operators are uppercase, as in CORE's query language):
+ * Operators are read in any case (AND, and, And), because CORE reads them that
+ * way: `drone and delivery` finds the same papers as `drone AND delivery`.
+ *
+ * Grammar:
  *   or      := and ( OR and )*
  *   and     := not ( AND? not )*        adjacent terms are an implicit AND
  *   not     := NOT not | primary
@@ -16,7 +19,14 @@
  */
 
 export type QueryNode =
-  | { type: 'term'; field: string | null; value: string }
+  | {
+      type: 'term';
+      field: string | null;
+      /** The words to look for, without the field name or quotes. */
+      value: string;
+      /** The term exactly as written, e.g. title:"machine learning". */
+      text: string;
+    }
   | { type: 'not'; child: QueryNode }
   | { type: 'and' | 'or'; children: QueryNode[] };
 
@@ -75,7 +85,11 @@ function tokenize(text: string): Token[] {
         }
       }
       const word = text.slice(start, i);
-      tokens.push({ kind: OPERATORS[word] ?? 'term', text: word, position: start });
+      tokens.push({
+        kind: OPERATORS[word.toUpperCase()] ?? 'term',
+        text: word,
+        position: start,
+      });
     }
   }
 
@@ -88,7 +102,7 @@ function toTerm(token: Token): QueryNode {
   const match = /^([A-Za-z_][\w.]*):(.+)$/.exec(token.text);
   const field = match && !token.text.startsWith('"') ? match[1] : null;
   const raw = field && match ? match[2] : token.text;
-  return { type: 'term', field, value: raw.replace(/"/g, '') };
+  return { type: 'term', field, value: raw.replace(/"/g, ''), text: token.text };
 }
 
 class Parser {

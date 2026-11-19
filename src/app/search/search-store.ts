@@ -76,8 +76,10 @@ export function toCoreQuery(request: SearchRequest): string {
     const value = request[key];
     if (value) filters.push(`${field}:${phrase(value)}`);
   }
-  const query = normalizeForCore(request.query);
-  return filters.length ? [`(${query})`, ...filters].join(' AND ') : query;
+  // Normalised as one query, so the filters join the user's terms in a shape CORE counts correctly.
+  return normalizeForCore(
+    filters.length ? [`(${request.query})`, ...filters].join(' AND ') : request.query,
+  );
 }
 
 /**

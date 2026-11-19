@@ -1,6 +1,11 @@
 import { findQueryIssue, parseQuery } from './boolean-query';
 
-const term = (value: string, field: string | null = null) => ({ type: 'term', field, value });
+const term = (value: string, field: string | null = null, text = value) => ({
+  type: 'term',
+  field,
+  value,
+  text,
+});
 
 function ast(text: string) {
   const result = parseQuery(text);
@@ -30,6 +35,14 @@ describe('parseQuery', () => {
     });
   });
 
+  it('reads operators in any case, as CORE does', () => {
+    expect(ast('drone and (package or delivery)')).toEqual(ast('drone AND (package OR delivery)'));
+    expect(ast('drone And Not military')).toEqual({
+      type: 'and',
+      children: [term('drone'), { type: 'not', child: term('military') }],
+    });
+  });
+
   it('supports NOT, including after AND', () => {
     expect(ast('drone AND NOT military')).toEqual({
       type: 'and',
@@ -38,15 +51,18 @@ describe('parseQuery', () => {
   });
 
   it('keeps quoted phrases and field prefixes together', () => {
-    expect(ast('"climate change"')).toEqual(term('climate change'));
+    expect(ast('"climate change"')).toEqual(term('climate change', null, '"climate change"'));
     expect(ast('title:"machine learning (ML)" AND yearPublished>=2020')).toEqual({
       type: 'and',
-      children: [term('machine learning (ML)', 'title'), term('yearPublished>=2020')],
+      children: [
+        term('machine learning (ML)', 'title', 'title:"machine learning (ML)"'),
+        term('yearPublished>=2020'),
+      ],
     });
   });
 
   it('does not treat a colon inside a phrase as a field', () => {
-    expect(ast('"drones: a review"')).toEqual(term('drones: a review'));
+    expect(ast('"drones: a review"')).toEqual(term('drones: a review', null, '"drones: a review"'));
   });
 });
 

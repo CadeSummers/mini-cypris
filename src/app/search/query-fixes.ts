@@ -1,3 +1,5 @@
+import { shapeForCore } from './core-query-shape';
+
 /**
  * Small repairs and tips for queries that are well formed but will not do
  * what the user meant. Everything here is plain text handling: no network.
@@ -28,7 +30,7 @@ const FIELD_ALIASES: Record<string, string> = {
  */
 export const CORE_AUTHOR_FIELD = 'authors/name';
 
-const OPERATOR = /^(?:AND|OR|NOT)$/;
+const OPERATOR = /^(?:AND|OR|NOT)$/i;
 
 /** Applies `change` to the parts of a query outside double quotes. */
 function outsideQuotes(text: string, change: (part: string) => string): string {
@@ -49,6 +51,9 @@ function outsideQuotes(text: string, change: (part: string) => string): string {
  *   words, and quoted values after a field name, are not touched.
  * - `authors:` and `author:` are sent as `authors/name:`, the field CORE
  *   really searches (see CORE_AUTHOR_FIELD).
+ * - Nested groups are flattened into a shape CORE counts correctly (see
+ *   shapeForCore): `(drone AND (package OR delivery))` is sent as
+ *   `drone AND (package OR delivery)`.
  */
 export function normalizeForCore(query: string): string {
   const tidied = query
@@ -56,8 +61,10 @@ export function normalizeForCore(query: string): string {
     .replace(/(^|[\s(])"([^"\s():]+)"(?=[\s)]|$)/g, (whole, before: string, word: string) =>
       OPERATOR.test(word) ? whole : before + word,
     );
-  return outsideQuotes(tidied, (part) =>
-    part.replace(/(^|[\s(])authors?(?=:)/gi, `$1${CORE_AUTHOR_FIELD}`),
+  return shapeForCore(
+    outsideQuotes(tidied, (part) =>
+      part.replace(/(^|[\s(])authors?(?=:)/gi, `$1${CORE_AUTHOR_FIELD}`),
+    ),
   );
 }
 
@@ -67,18 +74,6 @@ export function normalizeForCore(query: string): string {
  */
 export function findQueryTip(text: string): QueryTip | null {
   const unquoted = text.replace(/"[^"]*"/g, ' ');
-
-  const lower = /(?:^|[\s(])(and|or|not)(?=[\s)]|$)/.exec(unquoted)?.[1];
-  if (lower) {
-    const upper = lower.toUpperCase();
-    return {
-      message: `Operators are uppercase. “${lower}” is searched as an ordinary word.`,
-      action: `Use ${upper}`,
-      fixed: outsideQuotes(text, (part) =>
-        part.replace(new RegExp(`(^|[\\s(])${lower}(?=[\\s)]|$)`, 'g'), `$1${upper}`),
-      ),
-    };
-  }
 
   const alias = /(?:^|[\s(])(year)(?=[:<>=])/i.exec(unquoted)?.[1];
   if (alias) {

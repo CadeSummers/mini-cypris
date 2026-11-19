@@ -62,17 +62,17 @@ describe('SearchBar', () => {
     expect(queryInput().getAttribute('aria-invalid')).toBe('true');
   });
 
-  it('hints when an operator is lowercase', async () => {
-    await type(queryInput(), 'drone and delivery', 'input');
-    expect(el().querySelector('.hint')?.textContent).toContain('AND');
+  it('hints when a field name is one CORE does not have', async () => {
+    await type(queryInput(), 'drone AND year>=2020', 'input');
+    expect(el().querySelector('.hint')?.textContent).toContain('yearPublished');
   });
 
   it('applies a tip with one click', async () => {
-    await type(queryInput(), 'drone and delivery', 'input');
+    await type(queryInput(), 'drone AND year>=2020', 'input');
     el().querySelector<HTMLButtonElement>('.fix')?.click();
     await fixture.whenStable();
 
-    expect(queryInput().value).toBe('drone AND delivery');
+    expect(queryInput().value).toBe('drone AND yearPublished>=2020');
     expect(el().querySelector('.hint')).toBeNull();
   });
 

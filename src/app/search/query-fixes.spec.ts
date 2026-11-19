@@ -4,7 +4,7 @@ describe('normalizeForCore and authors', () => {
   it('sends authors: and author: as the field CORE really searches', () => {
     expect(normalizeForCore('drone AND authors:smith')).toBe('drone AND authors/name:smith');
     expect(normalizeForCore('(author:"Smith, Jane" OR Authors:"Jane Smith")')).toBe(
-      '(authors/name:"Smith, Jane" OR authors/name:"Jane Smith")',
+      'authors/name:"Smith, Jane" OR authors/name:"Jane Smith"',
     );
   });
 
@@ -18,7 +18,7 @@ describe('normalizeForCore and authors', () => {
 describe('normalizeForCore', () => {
   it('removes quotes around single words, which CORE fails on', () => {
     expect(normalizeForCore('"Abiogenesis" AND "Exoplanet"')).toBe('Abiogenesis AND Exoplanet');
-    expect(normalizeForCore('("drone" OR uav)')).toBe('(drone OR uav)');
+    expect(normalizeForCore('("drone" OR uav)')).toBe('drone OR uav');
   });
 
   it('leaves phrases, fielded values and quoted operators alone', () => {
@@ -26,10 +26,20 @@ describe('normalizeForCore', () => {
       '"climate change" AND NOT policy',
       'title:"learning"',
       'documentType:"thesis"',
-      'cats "AND" dogs',
       'drone AND delivery',
     ];
     for (const query of untouched) expect(normalizeForCore(query)).toBe(query);
+  });
+
+  it('keeps a quoted operator as a word to search for', () => {
+    expect(normalizeForCore('cats "AND" dogs')).toBe('cats AND "AND" AND dogs');
+    expect(normalizeForCore('cats "or" dogs')).toBe('cats AND "or" AND dogs');
+  });
+
+  it('sends the example from the brief without the outer parentheses CORE miscounts', () => {
+    expect(normalizeForCore('(drone AND (package OR delivery))')).toBe(
+      'drone AND (package OR delivery)',
+    );
   });
 
   it('straightens curly quotes', () => {
@@ -39,10 +49,8 @@ describe('normalizeForCore', () => {
 });
 
 describe('findQueryTip', () => {
-  it('offers to uppercase a lowercase operator, outside quotes only', () => {
-    const tip = findQueryTip('drone and "supply and demand" and uav');
-    expect(tip?.action).toBe('Use AND');
-    expect(tip?.fixed).toBe('drone AND "supply and demand" AND uav');
+  it('has nothing to say about lowercase operators, which CORE accepts', () => {
+    expect(findQueryTip('drone and "supply and demand" and uav')).toBeNull();
   });
 
   it('ignores operators inside quotes and inside other words', () => {
