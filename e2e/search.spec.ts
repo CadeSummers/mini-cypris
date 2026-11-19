@@ -164,7 +164,7 @@ test('the previous papers stay on screen, dimmed, until the new ones arrive', as
   const firstTitle = await cards(page).first().getByRole('heading').innerText();
 
   // Hold the next search so the in-between state can be looked at.
-  let release: () => void = () => {};
+  let release = (): void => undefined;
   const held = new Promise<void>((resolve) => (release = resolve));
   await page.route('**/search/works/?*', async (route) => {
     await held;
@@ -192,7 +192,7 @@ test('the previous papers stay on screen, dimmed, until the new ones arrive', as
 test('the first search shows placeholders, since there is nothing earlier to keep', async ({
   page,
 }) => {
-  let release: () => void = () => {};
+  let release = (): void => undefined;
   const held = new Promise<void>((resolve) => (release = resolve));
   await page.route('**/search/works/?*', async (route) => {
     await held;

@@ -79,7 +79,7 @@ test('a search that finds nothing offers a spelling correction, and clicking it 
 
 test('related searches appear by themselves, after the papers', async ({ page, core, ai }) => {
   // The model answers slowly; the papers must not wait for it.
-  let release: () => void = () => {};
+  let release = (): void => undefined;
   const held = new Promise<void>((resolve) => (release = resolve));
   ai.onAsk(() => ({ body: { ok: true, queries: RELATED } }));
   await page.route('**/ai/query', async (route) => {
