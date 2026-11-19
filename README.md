@@ -12,17 +12,19 @@ query.
 Built as a take-home project for Cypris. The reasoning behind each choice, with the
 alternatives considered, is in [Design_Decisions.md](Design_Decisions.md).
 
-![A 20-second demo: a boolean search, switching the chart to publishers and authors, clicking the 2021 bar to list that year's papers, then refining the loaded papers in the browser](docs/demo.gif)
+![A 35-second demo: a question typed in plain English becomes a boolean query with a document type and a year filter; the results arrive with related searches; the chart is switched to publishers and a bar is clicked to list that publisher's papers, with citation figures on the cards; then the page is switched to the dark theme](docs/demo.gif)
 
 ![Search results for a boolean query, with the papers-per-year chart above the paper cards](docs/search-desktop.png)
 
-![A plain-English question turned into a boolean query, with the results and three related searches suggested below the chart](docs/plain-english.png)
+![A plain-English question, "journal articles about drone delivery published by Elsevier since 2020", turned into a boolean query with a document type, a publisher and a year filter, with the results and related searches below the chart](docs/plain-english.png)
 
 ![Paper cards sorted by citations, each with a row of citation count, FWCI, RCR and h-index figures](docs/citation-metrics.png)
 
-| Year drill-down                                                                                     | Document type drill-down                                                                                                  | Chart by publisher                                                                        | Phone width                                                          |
-| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| ![The 2021 bar selected in the chart, with the list narrowed to that year](docs/year-drilldown.png) | ![The Thesis type selected in the document type chart, with the list narrowed to the 862 theses](docs/type-drilldown.png) | ![The ten most common publishers for the query as ranked bars](docs/chart-publishers.png) | ![The same search at a 390-pixel-wide screen](docs/search-phone.png) |
+![The dark theme, with the publisher chart opened as a table that sets each publisher's paper count beside its loaded papers, their citations and its h-index](docs/dark-theme.png)
+
+| Year drill-down                                                                                     | Document type drill-down                                                                                                    | Publisher click-through                                                                                                                                         | Phone width                                                          |
+| --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| ![The 2021 bar selected in the chart, with the list narrowed to that year](docs/year-drilldown.png) | ![The Thesis type selected in the document type chart, with the list narrowed to the 8,737 theses](docs/type-drilldown.png) | ![The ten most common publishers as ranked bars, one of them clicked, with the list narrowed to that publisher and a removable chip](docs/chart-publishers.png) | ![The same search at a 390-pixel-wide screen](docs/search-phone.png) |
 
 ## Run it
 
@@ -35,16 +37,23 @@ npm install
 npm start
 ```
 
-Open <http://localhost:4200> and try `(drone AND (package OR delivery))`.
+Open <http://localhost:4200>. **Add a CORE API key before searching** (next section): without
+one the app starts, but CORE refuses most searches. To try the app with no setup at all, use
+the [live demo](https://mini-cypris.cadetsummers.workers.dev).
 
-### API key (optional, recommended)
-
-The app works without a key, but CORE then allows only a handful of requests per minute. A
-free key raises the daily allowance:
+### API key (free, needed in practice)
 
 1. Request a key at <https://core.ac.uk/services/api>.
 2. Copy `.env.example` to `.env` and paste the key after `CORE_API_KEY=`.
 3. Restart `npm start`. The terminal prints whether the key was picked up.
+4. Try `(drone AND (package OR delivery))`.
+
+**Without a key.** The app runs and sends its requests to CORE anonymously, but CORE's
+anonymous allowance is too small to search with. I checked from a fresh clone on 2026-11-19:
+the first search was refused (HTTP 429) and CORE asked for a ten-minute wait; after the wait,
+one of the two requests a search makes (the chart's counts) was answered and the other (the
+papers) was refused again. The app handles this as it handles any rate limit: it says so,
+shows the time CORE will accept searches again, and points here.
 
 `.env` is git-ignored. The key is read by the dev-server proxy (`proxy.conf.mjs`) and added to
 requests on the server side, so it never reaches the browser bundle.

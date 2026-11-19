@@ -2,8 +2,9 @@
 //
 // The browser calls /core-api/...; this proxy forwards to api.core.ac.uk and,
 // if a key is available, attaches it as a Bearer token. The key therefore never
-// reaches the browser bundle or the repository. Without a key the app still
-// works, at CORE's lower anonymous rate limit.
+// reaches the browser bundle or the repository. Without a key the requests are
+// sent anonymously; CORE then refuses most of them (see the README), and the
+// app shows its rate-limit message.
 import { existsSync, readFileSync } from 'node:fs';
 
 function readApiKey() {
@@ -23,7 +24,7 @@ const apiKey = readApiKey();
 console.log(
   apiKey
     ? '[proxy] CORE API key loaded; requests are authenticated.'
-    : '[proxy] No CORE_API_KEY found; using anonymous access (lower rate limit).',
+    : '[proxy] No CORE_API_KEY found; CORE refuses most anonymous searches. See "API key" in the README.',
 );
 
 export default {
