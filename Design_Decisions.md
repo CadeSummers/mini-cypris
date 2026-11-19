@@ -732,6 +732,49 @@ against CORE:
 - **Publisher** is written as the one identifying word (`publisher:Elsevier`), which is how
   CORE matches it and what a person asking in plain English means.
 
+**Author names are held to what the user wrote, in code.** The first live run of the new
+prompt showed the model adding a given name of its own: asked for papers "by Hughes", it
+wrote `authors:"Hughes, Terry"`, and at other times an empty one, `authors:"Hughes, "`. A
+made-up name narrows the search to something nobody asked for, and a prompt rule alone did
+not stop it. The Worker now cuts every author value in a plain-English answer down to the
+words that appear in the request (`keepStatedAuthors` in `worker/ai-query.js`), so those two
+become `authors:Hughes`. A full name the user did give is kept in both orders.
+
+**Checked against the real model and the real CORE, 2026-11-19.** Each question was asked on
+the deployed site and the query it produced was then run against CORE:
+
+| Question                                                              | Query written                                                                                                           | Papers  | Sample checked                                      |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------- | --------------------------------------------------- |
+| research on drone delivery that Elsevier published                    | `drone AND delivery AND publisher:Elsevier`                                                                             | 253     | Elsevier BV, Pergamon-Elsevier, Amsterdam: Elsevier |
+| papers on perovskite solar cells from Oxford University Press         | `"perovskite solar cells" AND publisher:"Oxford University Press"`                                                      | 12      | all Oxford University Press (OUP)                   |
+| drone delivery papers written by Balsam Alkouz                        | `(drone OR uav) AND delivery AND (authors:"Alkouz, Balsam" OR authors:"Balsam Alkouz")`                                 | 22      | Alkouz listed on each                               |
+| theses written by Smith on deep learning since 2020                   | `"deep learning" AND authors:Smith AND documentType:"thesis" AND yearPublished>=2020`                                   | 24      | theses, by a Smith, 2024 to 2025                    |
+| theses about microplastics in rivers                                  | `microplastics AND river AND documentType:"thesis"`                                                                     | 404     | all theses                                          |
+| journal articles on CRISPR gene editing                               | `CRISPR AND "gene editing" AND documentType:"journal article"`                                                          | 1,712   | all journal articles                                |
+| conference papers about swarm robotics                                | `"swarm robotics" AND documentType:"conference paper"`                                                                  | 365     | all conference papers                               |
+| review papers on gut microbiome and depression                        | `"gut microbiome" AND depression AND documentType:"review"`                                                             | 10      | all reviews                                         |
+| studies of battery recycling since 2018                               | `"battery recycling" AND yearPublished>=2018`                                                                           | 1,792   | 2021 to 2024                                        |
+| papers on quantum error correction between 2015 and 2020              | `"quantum error correction" AND yearPublished>=2015 AND yearPublished<=2020`                                            | 693     | 2018 to 2020                                        |
+| recent work on large language models in education                     | `"large language models" AND education AND yearPublished>=2021`                                                         | 6,034   | 2024 to 2025                                        |
+| conference papers on federated learning by Zhang from IEEE since 2021 | `"federated learning" AND documentType:"conference paper" AND authors:Zhang AND publisher:IEEE AND yearPublished>=2021` | not run | query only                                          |
+
+Every stated filter appears in every query. What the run also showed:
+
+- **Three later questions found nothing** (for example `"coral reef ecology" AND
+documentType:"journal article" AND authors:Hughes AND yearPublished>=2016`). The filters
+  were right; the model had turned the topic into a three-word phrase, which is strict.
+  Automatic suggestions (7c) then offer looser searches.
+- **One question was refused as unclear once and answered correctly when asked again.** The
+  model is not perfectly repeatable even at temperature 0.
+- **Answers are cached for 24 hours per question,** so a question asked before a prompt
+  change keeps its old query for a day. The run used fresh wording after each change.
+- **The sample is small and was run once.** It shows the filters work, not how often the
+  model chooses good topic words.
+
+Chart clicks were checked on the live site in the same session, on `drone AND delivery`:
+type "Text" (bar 852, list 852), publisher "Elsevier BV" (163, 163) and author "Alkouz,
+Balsam" (20, 20). The dimmed previous list appeared on each.
+
 No field was added. I tried the other candidates against CORE: `language`, `fullText`,
 `citationCount` and `dataProviders` are refused, and `fieldOfStudy` is accepted but nearly
 empty (7 of about 1,200 papers on drone delivery carry it).
@@ -794,7 +837,7 @@ refused as unclear, fixed by adding a question to the prompt's examples.
 - _Rules instead of a model_ ("after 2000" becomes `yearPublished>2000`): free and
   predictable, but it only handles phrasings someone thought of.
 
-**Tests.** 18 Worker tests in `worker/ai-query.test.mjs` run the real Worker with a scripted
+**Tests.** 22 Worker tests in `worker/ai-query.test.mjs` run the real Worker with a scripted
 fake model, mostly to make the model misbehave: prose, unknown fields, wrong types, a reply
 that is not JSON. Each must come out as a refusal code. To prove the tests would notice, I
 switched the query check off by hand once: two tests failed, and I switched it back on.
