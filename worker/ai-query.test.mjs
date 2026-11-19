@@ -11,7 +11,13 @@ import assert from 'node:assert/strict';
 import { after, before, beforeEach, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { Miniflare, Response } from 'miniflare';
-import { isSafeCoreQuery, MAX_TEXT, MODEL, modelLimitRetryAt } from './ai-query.js';
+import {
+  isSafeCoreQuery,
+  keepStatedAuthors,
+  MAX_TEXT,
+  MODEL,
+  modelLimitRetryAt,
+} from './ai-query.js';
 
 const SITE = 'https://mini-cypris.example';
 const ENDPOINT = `${SITE}/ai/query`;
@@ -424,6 +430,49 @@ test('the prompt tells the model the document types CORE uses and how to write n
   assert.match(system, /authors:"Smith, Jane" OR authors:"Jane Smith"/);
   assert.match(system, /publisher:Elsevier/);
   assert.doesNotMatch(system, /DOCUMENT_TYPES|CURRENT_YEAR/);
+});
+
+test('an author filter keeps only the name words the request contains', () => {
+  const by = 'journal articles about coral reefs by Hughes after 2015';
+  // A given name the model made up is removed, and the repeat it leaves is said once.
+  assert.equal(
+    keepStatedAuthors('"coral reef" AND (authors:"Hughes, Terry" OR authors:"Terry Hughes")', by),
+    '"coral reef" AND authors:Hughes',
+  );
+  // So is an empty given name, and quotes around what is now one word.
+  assert.equal(
+    keepStatedAuthors('reef AND (authors:"Hughes, " OR authors:Hughes) AND publisher:Springer', by),
+    'reef AND authors:Hughes AND publisher:Springer',
+  );
+  assert.equal(
+    keepStatedAuthors('reef AND (authors:Hughes OR authors:"Hughes, " OR authors:"Hughes")', by),
+    'reef AND authors:Hughes',
+  );
+
+  // A full name the user gave is kept, in both orders, whatever its case.
+  const full = 'drone delivery papers written by balsam alkouz';
+  const both = '(drone OR uav) AND (authors:"Alkouz, Balsam" OR authors:"Balsam Alkouz")';
+  assert.equal(keepStatedAuthors(both, full), both);
+
+  // Nothing but author values is touched.
+  const other = 'title:"Terry Hughes" AND NOT (reef OR atoll) AND yearPublished>=2015';
+  assert.equal(keepStatedAuthors(other, by), other);
+  // An author with no word from the request cannot be cut down, so it is left.
+  assert.equal(keepStatedAuthors('reef AND authors:Smith', by), 'reef AND authors:Smith');
+});
+
+test('a made-up given name never reaches the page', async () => {
+  modelReply = () =>
+    answer({
+      ok: true,
+      queries: ['"coral reef" AND (authors:"Hughes, Terry" OR authors:"Terry Hughes")'],
+      reason: '',
+    });
+  const reply = await ask({ mode: 'translate', text: `coral reef papers by Hughes ${newText()}` });
+  assert.deepEqual(await reply.json(), {
+    ok: true,
+    queries: ['"coral reef" AND authors:Hughes'],
+  });
 });
 
 test("tells Cloudflare's two volume errors apart from other failures", () => {

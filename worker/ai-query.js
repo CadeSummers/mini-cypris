@@ -72,7 +72,7 @@ Query syntax:
 - Join terms with AND, OR, NOT in capitals and group with parentheses. Always write the operator between two terms; never put two terms side by side.
 - A phrase of two or more words goes in double quotes: "climate change". Never put quotes around a single word.
 - Fields: title:word, abstract:word, authors:name, publisher:word, documentType:"thesis", yearPublished:2020. Years can be compared: yearPublished>2000, yearPublished>=2015, yearPublished<=2020. Use no other fields.
-- Authors: CORE stores names as "Surname, Given". For a surname alone write authors:Smith. For a full name write both orders: (authors:"Smith, Jane" OR authors:"Jane Smith").
+- Authors: CORE stores names as "Surname, Given". If the request gives only a surname, write exactly authors:Smith and nothing more. Only if the request itself gives a given name too, write both orders: (authors:"Smith, Jane" OR authors:"Jane Smith"). Never add a given name or initial that is not in the request.
 - Publisher: use the one word that identifies the publisher, unquoted: publisher:Elsevier, publisher:Springer, publisher:IEEE. Use a quoted phrase only when one word would not identify it: publisher:"Oxford University Press".
 - Document type must be exactly one of: DOCUMENT_TYPES. "Papers" or "articles" with no kind stated means no documentType at all. "Journal articles" is documentType:"journal article"; "theses" or "dissertations" is documentType:"thesis"; "PhD theses" is documentType:"doctoral thesis"; "conference papers" is documentType:"conference paper"; "reviews" is documentType:"review".
 - Every filter the request states (author, publisher, kind of document, years) must appear in the query.
@@ -231,6 +231,49 @@ function showAuthorField(query) {
     .join('');
 }
 
+/** The words of a text, lower-cased, for comparing names without regard to case or commas. */
+function words(text) {
+  return text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+}
+
+/**
+ * Holds author filters to the names the user actually wrote.
+ *
+ * Asked for papers "by Hughes", the model has added a given name of its own
+ * ("Hughes, Terry") and has written an empty one ("Hughes, "). Either narrows
+ * the search to something the user never asked for. Each author value is
+ * therefore cut down to its words that appear in the request; a value left
+ * with one word is written without quotes. An author value sharing no word
+ * with the request is left alone: there is nothing to cut it down to.
+ */
+export function keepStatedAuthors(query, request) {
+  const stated = new Set(words(request));
+  const tokens = tokenize(query);
+  if (!tokens) return query;
+
+  const kept = tokens.map((token) => {
+    const author = /^authors:(?:"([^"]*)"|(.+))$/.exec(token);
+    if (!author) return token;
+    const value = (author[1] ?? author[2]).trim();
+    const parts = value.split(/[\s,]+/).filter(Boolean);
+    const known = parts.filter((part) => words(part).some((word) => stated.has(word)));
+    if (!known.length) return token;
+    if (known.length === parts.length && parts.length > 1) return `authors:"${value}"`;
+    return known.length === 1 ? `authors:${known[0]}` : `authors:"${known.join(' ')}"`;
+  });
+
+  let result = kept.join(' ').replace(/\( /g, '(').replace(/ \)/g, ')');
+  // Cutting values down can leave "(authors:Hughes OR authors:Hughes)"; say it once.
+  let previous;
+  do {
+    previous = result;
+    result = result
+      .replace(/(authors:(?:"[^"]*"|[^\s()]+)) OR \1(?=[\s)]|$)/g, '$1')
+      .replace(/\((authors:(?:"[^"]*"|[^\s()]+))\)/g, '$1');
+  } while (result !== previous);
+  return result;
+}
+
 /**
  * Reduces whatever the model said to what the app may see: the queries that
  * pass the check, or a refusal code.
@@ -255,7 +298,10 @@ export function toResult(reply, mode, text) {
   for (const candidate of Array.isArray(parsed.queries) ? parsed.queries : []) {
     const raw = typeof candidate === 'string' ? unquoteSingleWords(candidate.trim()) : '';
     if (!isSafeCoreQuery(raw)) continue;
-    const query = showAuthorField(raw);
+    // For a question in plain English, the request is the only source of author names.
+    const query =
+      mode === 'translate' ? keepStatedAuthors(showAuthorField(raw), text) : showAuthorField(raw);
+    if (!isSafeCoreQuery(query)) continue;
     // A spelling fix keeps every term; one that drops or adds terms changed the meaning.
     if (mode === 'correct' && countTerms(query) !== countTerms(text)) continue;
     // A suggestion identical to what the user already ran is no suggestion.
