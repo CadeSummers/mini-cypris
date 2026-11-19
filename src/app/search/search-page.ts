@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
+import { buildCategoryMetrics } from '../chart/category-metrics';
 import { cleanCategoryLabel } from '../chart/category-series';
 import { ChartPanel } from '../chart/chart-panel';
 import { PaperMetricsStore, PaperSort, sortPapers } from '../metrics/paper-metrics';
@@ -128,6 +129,16 @@ export class SearchPage {
   protected readonly withMetrics = computed(
     () => this.store.papers().filter((paper) => this.metrics.for(paper) !== null).length,
   );
+
+  /** What the loaded papers say about each publisher and author, for the chart tables. */
+  protected readonly categoryMetrics = computed(() => {
+    const papers = this.store.papers();
+    const metricsFor = (paper: (typeof papers)[number]) => this.metrics.for(paper);
+    return {
+      publisher: buildCategoryMetrics(papers, 'publisher', metricsFor),
+      authors: buildCategoryMetrics(papers, 'authors', metricsFor),
+    };
+  });
 
   /**
    * The papers to list: filtered by the refine box (while it is incomplete or

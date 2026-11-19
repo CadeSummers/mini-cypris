@@ -1007,6 +1007,54 @@ in the URL (`type=thesis`), and combines with a year chosen from the year chart.
 - _Filtering the loaded papers in the browser_: instant and free, but wrong whenever the
   query has more matches than are loaded.
 
+### 9c. "View as table" on the publisher and author charts
+
+_Brief step 6 (the chart), step 8 (additions)._
+
+**Decision.** The "Publisher" and "Author" views have a "View as table", like the year chart.
+Each row is one bar, with five columns: the name, **Papers** (the bar's own count), **Loaded
+papers** (how many of the papers on screen carry that name), **Citations** (those papers'
+citations added up) and **h-index**.
+
+**Why.**
+
+- **The table adds what the bars cannot show.** The bars answer "who publishes most on
+  this?". The table sets citation context (5b) beside that answer.
+- **The two sources are kept in separate columns.** Papers is counted by CORE over every
+  matching paper. The other three columns come only from the loaded papers, because citation
+  metrics are looked up per paper, by DOI. A note under the table says so.
+- **A dash, not a zero, where nothing is known.** "0 citations" and "no data" are different
+  facts. A screen reader hears "no data".
+- **No extra requests.** The table is computed in the browser from metrics already fetched
+  for the cards (`src/app/chart/category-metrics.ts`).
+
+**How names are matched.**
+
+- **Publisher:** a row gets the h-index OpenAlex gives for a loaded paper that CORE files
+  under that publisher. The two sources often spell the publisher differently, so the link is
+  made through the paper, not by comparing names.
+- **Author:** the metrics name one author per paper (the first or last, whichever has the
+  higher h-index). A row gets that h-index only when its name matches, with "Li, Xueping"
+  and "Xueping Li" read as the same name. Other authors of the paper show a dash.
+
+**Trade-offs, stated plainly.**
+
+- **Many rows show dashes.** The top ten publishers of 50,000 matching papers are often not
+  among the 10 to 100 papers loaded. Loading more papers fills in more rows. When CORE's
+  counts are unavailable and the chart ranks the loaded papers, every row has context.
+- **Citations is a sum over loaded papers, not the publisher's or author's total.** The
+  column note says this; the h-index is the figure that describes them as a whole.
+- **Document types have no table.** There is no citation figure for a type, and the list of
+  bars already reads correctly in a screen reader.
+
+**Alternatives.**
+
+- _Asking OpenAlex about each top publisher and author by name_: would fill every row, but
+  matching free-text names to OpenAlex records guesses, and a wrong match puts another
+  person's h-index on screen.
+- _Showing the metric columns in the bar list itself_: crowds the chart on a phone; a
+  collapsed table costs nothing until opened.
+
 ## 10. URL state, load more
 
 _Brief step 8 (extras), step 5 ("efficiently")._

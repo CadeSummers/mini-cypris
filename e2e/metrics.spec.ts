@@ -118,3 +118,48 @@ test('if citation metrics are unavailable the papers are still listed', async ({
   await expect(cards(page)).toHaveCount(10);
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
+
+test('the publisher and author charts can be viewed as a table with citation context', async ({
+  page,
+  core,
+  metrics,
+}) => {
+  metrics.onLookUp(() => ({
+    body: {
+      metrics: {
+        [doi(1)]: { ...FULL, author: { name: 'Sam Example', hIndex: 37 } },
+        [doi(2)]: { citations: 3 },
+      },
+    },
+  }));
+  await search(page);
+  const switcher = page.getByRole('group', { name: 'Chart the matching papers by' });
+  const ranked = page.locator('app-ranked-chart');
+  const cells = (name: string | RegExp) => ranked.getByRole('row', { name }).getByRole('cell');
+
+  // CORE's top publishers are counted over every match; none of the loaded papers is theirs.
+  await switcher.getByRole('button', { name: 'Publisher' }).click();
+  await ranked.getByText('View as table').click();
+  await expect(ranked.getByRole('columnheader')).toHaveText([
+    'Publisher',
+    'Papers',
+    'Loaded papers',
+    'Citations',
+    'h-index',
+  ]);
+  await expect(cells('Aerial Systems Society')).toHaveText(['412', '0', /no data/, /no data/]);
+
+  // Document types have no citation context, so no table.
+  await switcher.getByRole('button', { name: 'Document type' }).click();
+  await expect(ranked.getByText('View as table')).toHaveCount(0);
+
+  // In the fallback the chart ranks the loaded papers, so every row has context.
+  core.onAggregate(() => ({ status: 500, body: {} }));
+  await page.getByLabel('Boolean search').fill('another query');
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
+  await expect(cards(page)).toHaveCount(10);
+  await switcher.getByRole('button', { name: 'Author' }).click();
+  await ranked.getByText('View as table').click();
+  await expect(cells('Sam Example')).toHaveText(['10', '10', '139', '37']);
+  await expect(cells(/^Author 1 /)).toHaveText(['1', '1', '136', /no data/]);
+});

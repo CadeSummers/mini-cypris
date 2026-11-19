@@ -33,6 +33,8 @@
     [selected]="dimension() === 'documentType' ? selectedType() : null"
     [hint]="typeHint"
     pickLabel="List papers of type"
+    [metrics]="rankedMetrics()"
+    [nameHeading]="text.column"
     (itemSelected)="typeSelected.emit($event)"
   />
 }

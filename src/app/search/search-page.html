@@ -16,6 +16,7 @@
   class="chart"
   [yearSeries]="store.chart()?.series ?? null"
   [breakdowns]="store.breakdowns()"
+  [categoryMetrics]="categoryMetrics()"
   [source]="store.chart()?.source ?? 'all'"
   [loading]="store.chartLoading()"
   [selectedYear]="store.request()?.year ?? null"

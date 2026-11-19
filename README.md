@@ -179,6 +179,10 @@ Mapped to the steps in the project brief:
     papers can be sorted by citations or FWCI. CORE has no usable citation data, so the
     numbers come from [OpenAlex](https://openalex.org) and
     [NIH iCite](https://icite.od.nih.gov), through the Worker. See `Design_Decisions.md` 5b.
+23. **Publisher and author tables.** The "Publisher" and "Author" charts have a "View as
+    table" that sets each name's paper count beside citation context from the loaded papers:
+    how many of them carry the name, their citations added up, and the h-index. A name that
+    no loaded paper carries shows a dash. See `Design_Decisions.md` 9c.
 
 ## Project layout
 

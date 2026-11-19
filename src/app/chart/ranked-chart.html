@@ -47,6 +47,56 @@
     @if (caveat()) {
       <p class="note">{{ caveat() }}</p>
     }
+
+    @if (metrics()) {
+      <details class="table">
+        <summary>View as table</summary>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{{ nameHeading() }}</th>
+              <th scope="col" class="number">Papers</th>
+              <th scope="col" class="number">Loaded papers</th>
+              <th scope="col" class="number">Citations</th>
+              <th scope="col" class="number">h-index</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rows(); track row.item.label) {
+              <tr>
+                <th scope="row">{{ row.item.label }}</th>
+                <td>{{ row.item.count | number }}</td>
+                <td>{{ row.metrics?.loaded ?? 0 | number }}</td>
+                <td>
+                  @if (row.metrics?.citations; as citations) {
+                    {{ citations | number }}
+                  } @else if (row.metrics?.citations === 0) {
+                    0
+                  } @else {
+                    <span aria-hidden="true">—</span><span class="visually-hidden">no data</span>
+                  }
+                </td>
+                <td>
+                  @if (row.metrics?.hIndex; as hIndex) {
+                    {{ hIndex | number }}
+                  } @else {
+                    <span aria-hidden="true">—</span><span class="visually-hidden">no data</span>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        <p class="table-note">
+          @if (source() === 'all') {
+            Papers counts every matching paper.
+          }
+          The other columns describe only the papers loaded below: how many carry this name, their
+          citations added up, and the h-index where OpenAlex gives one. A dash means no loaded paper
+          supplies the figure.
+        </p>
+      </details>
+    }
   } @else {
     <p class="placeholder">
       @if (loading()) {

@@ -1,5 +1,6 @@
 import { DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { CategoryMetrics, categoryKey } from './category-metrics';
 import { CategorySeries, TOP_CATEGORIES } from './category-series';
 import { ChartSource } from './year-chart';
 
@@ -8,7 +9,8 @@ import { ChartSource } from './year-chart';
  *
  * Plain HTML and CSS, not a canvas: the labels are long names that need to
  * wrap and be selectable, and a list is read correctly by screen readers
- * without a separate table alternative.
+ * without a separate table alternative. The optional "View as table" exists
+ * to add columns the bars cannot show, not to stand in for them.
  */
 @Component({
   selector: 'app-ranked-chart',
@@ -38,11 +40,28 @@ export class RankedChart {
   /** Start of each button's accessible name, e.g. "List papers of type". */
   readonly pickLabel = input('Select');
 
+  /**
+   * Citation context per row, keyed by `categoryKey(label)`. When given, the
+   * card offers a table with these columns beside the counts.
+   */
+  readonly metrics = input<ReadonlyMap<string, CategoryMetrics> | null>(null);
+  /** Column heading for the names, e.g. "Publisher". */
+  readonly nameHeading = input('Name');
+
   /** The picked value, or null when the current pick is clicked again. */
   readonly itemSelected = output<string | null>();
 
   protected readonly top = TOP_CATEGORIES;
   protected readonly items = computed(() => this.series()?.items ?? []);
+  /** Each bar with what the loaded papers say about it, for the table. */
+  protected readonly rows = computed(() => {
+    const metrics = this.metrics();
+    if (!metrics) return [];
+    return this.items().map((item) => ({
+      item,
+      metrics: metrics.get(categoryKey(item.label)) ?? null,
+    }));
+  });
   protected readonly hasData = computed(() => this.items().length > 0);
   private readonly max = computed(() => Math.max(1, ...this.items().map((item) => item.count)));
 

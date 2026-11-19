@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
+import { CategoryMetrics, MetricDimension } from './category-metrics';
 import { CategorySeries, Dimension } from './category-series';
 import { RankedChart } from './ranked-chart';
 import { ChartSource, YearChart } from './year-chart';
@@ -16,6 +17,8 @@ interface ViewOption {
 interface RankedText {
   heading: string;
   noun: string;
+  /** Heading of the name column in the table. */
+  column: string;
   caveat: string;
 }
 
@@ -36,17 +39,20 @@ const RANKED_TEXT: Record<Dimension, RankedText> = {
   documentType: {
     heading: 'Top document types',
     noun: 'document types',
+    column: 'Document type',
     caveat: '',
   },
   publisher: {
     heading: 'Top publishers',
     noun: 'publishers',
+    column: 'Publisher',
     caveat:
       'Publisher names are shown as CORE records them, so one publisher can appear under more than one name.',
   },
   authors: {
     heading: 'Top authors',
     noun: 'authors',
+    column: 'Author',
     caveat:
       'Author names are shown as CORE records them, so one person can appear under more than one spelling.',
   },
@@ -70,6 +76,11 @@ export class ChartPanel {
   readonly loading = input(false);
   readonly selectedYear = input<number | null>(null);
   readonly selectedType = input<string | null>(null);
+  /** Citation context for the publisher and author tables, from the loaded papers. */
+  readonly categoryMetrics = input<Record<
+    MetricDimension,
+    ReadonlyMap<string, CategoryMetrics>
+  > | null>(null);
 
   readonly yearSelected = output<number | null>();
   readonly typeSelected = output<string | null>();
@@ -95,5 +106,13 @@ export class ChartPanel {
   protected readonly rankedSeries = computed(() => {
     const dimension = this.dimension();
     return dimension ? (this.breakdowns()?.[dimension] ?? null) : null;
+  });
+
+  /** Only publishers and authors have citation context; document types do not. */
+  protected readonly rankedMetrics = computed(() => {
+    const dimension = this.dimension();
+    return dimension && dimension !== 'documentType'
+      ? (this.categoryMetrics()?.[dimension] ?? null)
+      : null;
   });
 }
