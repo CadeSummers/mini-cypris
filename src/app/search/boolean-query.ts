@@ -102,7 +102,12 @@ function toTerm(token: Token): QueryNode {
   const match = /^([A-Za-z_][\w.]*):(.+)$/.exec(token.text);
   const field = match && !token.text.startsWith('"') ? match[1] : null;
   const raw = field && match ? match[2] : token.text;
-  return { type: 'term', field, value: raw.replace(/"/g, ''), text: token.text };
+  const value = raw.replace(/"/g, '');
+  if (!value.trim()) {
+    // "" would match every paper here and is an error at CORE.
+    throw new QuerySyntaxError('Put a word between the quotes.', token.position);
+  }
+  return { type: 'term', field, value, text: token.text };
 }
 
 class Parser {

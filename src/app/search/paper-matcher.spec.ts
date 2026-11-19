@@ -34,6 +34,20 @@ describe('filterPapersByText', () => {
     expect(ids('(drone AND (package OR delivery))')).toEqual(['1']);
   });
 
+  it('matches where a word starts, as the highlighter does', () => {
+    expect(ids('deliver')).toEqual(['1', '3']);
+    expect(ids('deliver*')).toEqual(['1', '3']);
+    expect(ids('air')).toEqual(['3']); // "aircraft"
+    expect(ids('ai')).toEqual(['3']); // not "Grace" or "Alan", which only contain the letters
+    expect(ids('one')).toEqual([]); // inside "drone", not at the start of a word
+    expect(ids('title:"package delivery"')).toEqual(['1']);
+  });
+
+  it('rejects an empty phrase instead of matching everything', () => {
+    expect(() => ids('""')).toThrow('Put a word between the quotes.');
+    expect(() => ids('drone AND title:""')).toThrow('Put a word between the quotes.');
+  });
+
   it('handles OR, NOT and implicit AND', () => {
     expect(ids('drone OR bicycle')).toEqual(['1', '2', '3']);
     expect(ids('drone AND NOT military')).toEqual(['1']);

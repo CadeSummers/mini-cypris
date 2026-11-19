@@ -1,5 +1,6 @@
 import { Paper } from '../core-api/paper';
 import { QueryNode, parseQuery } from './boolean-query';
+import { wordPattern } from './highlight';
 
 /**
  * Evaluates a parsed boolean query against papers already in the browser.
@@ -8,8 +9,10 @@ import { QueryNode, parseQuery } from './boolean-query';
  * the main search bar asks CORE, this narrows what came back without spending
  * another API request.
  *
- * Matching is a case-insensitive substring test, so `deliver` matches
- * "delivery" and "delivering". Recognised fields: title, abstract, author(s),
+ * A term matches where a word starts, in any case, and the rest of the word
+ * is free: `deliver` and `deliver*` match "delivery" and "delivering", while
+ * `ai` matches "AI" but not "said". This is the rule the highlighter uses, so
+ * what is kept and what is marked agree. Recognised fields: title, abstract, author(s),
  * publisher, year (also as yearPublished, with >, >=, <, <=). Anything else is
  * matched against all of a paper's text.
  */
@@ -66,20 +69,28 @@ function compareYear(year: number | null, operator: string, target: number): boo
   }
 }
 
-function matchesTerm(field: string | null, value: string, doc: Searchable): boolean {
-  const needle = value.toLowerCase();
+/** One pattern per term, kept because every paper is tested against the same few terms. */
+const patterns = new Map<string, RegExp | null>();
 
+function containsWord(text: string, value: string): boolean {
+  // CORE allows a trailing wildcard (deliver*); a match already runs to the word's end.
+  const term = value.replace(/[*?]+$/, '').trim();
+  if (!patterns.has(term)) patterns.set(term, wordPattern([term], 'iu', 1));
+  return patterns.get(term)?.test(text) ?? false;
+}
+
+function matchesTerm(field: string | null, value: string, doc: Searchable): boolean {
   if (!field) {
     const comparison = YEAR_COMPARISON.exec(value);
     if (comparison) return compareYear(doc.year, comparison[1], Number(comparison[2]));
-    return doc.all.includes(needle);
+    return containsWord(doc.all, value);
   }
 
   const known = FIELD_ALIASES[field.toLowerCase()];
-  if (known === 'year') return doc.year !== null && String(doc.year) === needle;
-  if (known) return doc[known].includes(needle);
+  if (known === 'year') return doc.year !== null && String(doc.year) === value.trim();
+  if (known) return containsWord(doc[known], value);
   // Unknown field (e.g. a CORE-only one): fall back to searching everything.
-  return doc.all.includes(needle);
+  return containsWord(doc.all, value);
 }
 
 function evaluate(node: QueryNode, doc: Searchable): boolean {

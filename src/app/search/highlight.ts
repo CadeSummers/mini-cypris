@@ -82,23 +82,29 @@ function escapeRegExp(text: string): string {
 /**
  * Builds one pattern for all terms. A term matches where a word starts and the
  * match runs to the end of that word, so `drone` marks "drones" but not
- * "androne". CORE's search stems words in a similar way.
+ * "androne". CORE's search stems words in a similar way. The refine filter
+ * (paper-matcher.ts) uses the same pattern, so a paper it keeps is a paper
+ * whose match is marked.
  */
-function toPattern(terms: string[]): RegExp | null {
+export function wordPattern(
+  terms: string[],
+  flags = 'giu',
+  minLength = MIN_TERM_LENGTH,
+): RegExp | null {
   const alternatives = terms
-    .filter((term) => term.trim().length >= MIN_TERM_LENGTH)
+    .filter((term) => term.trim().length >= minLength)
     // Longest first, so "drone delivery" wins over "drone" where both apply.
     .sort((a, b) => b.length - a.length)
     .map((term) => term.trim().split(/\s+/).map(escapeRegExp).join('\\s+'));
 
   if (!alternatives.length) return null;
-  return new RegExp(`(?<![\\p{L}\\p{N}])(?:${alternatives.join('|')})[\\p{L}\\p{N}]*`, 'giu');
+  return new RegExp(`(?<![\\p{L}\\p{N}])(?:${alternatives.join('|')})[\\p{L}\\p{N}]*`, flags);
 }
 
 /** Splits `text` into alternating plain and matching segments, in order. */
 export function highlightSegments(text: string, terms: string[]): Segment[] {
   if (!text) return [];
-  const pattern = toPattern(terms);
+  const pattern = wordPattern(terms);
   if (!pattern) return [{ text, match: false }];
 
   const segments: Segment[] = [];
