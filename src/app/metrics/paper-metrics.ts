@@ -20,7 +20,7 @@ export interface PaperMetrics {
   percentile: number | null;
   /** NIH's Relative Citation Ratio; 1.0 is the median NIH-funded paper. */
   rcr: number | null;
-  /** The higher h-index of the first and last author. */
+  /** The highest h-index among the paper's authors. */
   author: NamedIndex | null;
   journal: NamedIndex | null;
   publisher: NamedIndex | null;

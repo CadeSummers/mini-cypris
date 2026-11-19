@@ -67,7 +67,7 @@ describe('PaperCard metrics', () => {
     expect(meanings[1]).toContain('Field-Weighted Citation Impact');
     expect(meanings[1]).toContain('percentile 99');
     expect(meanings[2]).toContain('Relative Citation Ratio');
-    expect(meanings[3]).toContain('first and last author');
+    expect(meanings[3]).toContain('highest h-index amongst the authors');
   });
 
   it('leaves out what a paper does not have, but keeps a real count of zero', async () => {

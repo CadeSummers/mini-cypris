@@ -70,7 +70,7 @@ export class PaperCard {
         label: 'Author h-index',
         value: `${metrics.author.hIndex} (${metrics.author.name})`,
         meaning:
-          'The higher h-index of the first and last author. An h-index of 20 means 20 ' +
+          'The highest h-index amongst the authors listed. An h-index of 20 means 20 ' +
           'papers cited at least 20 times each.',
       });
     }

@@ -29,6 +29,29 @@ const CACHE_SECONDS = 86_400;
 const CHUNK = 50;
 
 /**
+ * The most authors one lookup asks OpenAlex about, shared evenly between its
+ * papers. Every author of a paper is wanted, but a Worker may make only so
+ * many requests per call, and a few papers list hundreds of authors. 1,500 is
+ * 30 requests. With the usual 10 to 25 papers that is 60 to 150 authors each,
+ * more than nearly any paper has.
+ */
+export const AUTHOR_LOOKUPS = 1500;
+
+/**
+ * The OpenAlex ids of a paper's authors, at most `share` of them. A longer
+ * list keeps its first authors and its last, who by convention in many fields
+ * is the senior author.
+ */
+export function authorIds(authorships, share) {
+  const ids = (Array.isArray(authorships) ? authorships : [])
+    .map((authorship) => shortId(authorship?.author?.id, 'A'))
+    .filter(Boolean);
+  const distinct = [...new Set(ids)];
+  if (distinct.length <= share) return distinct;
+  return [...distinct.slice(0, share - 1), distinct.at(-1)];
+}
+
+/**
  * A DOI, lower-cased. "|" and "," are refused because they are OR and AND in
  * an OpenAlex filter; a DOI containing one simply gets no metrics.
  */
@@ -154,8 +177,8 @@ export async function lookUp(env, dois) {
     'doi,cited_by_count,fwci,citation_normalized_percentile,ids,authorships,primary_location',
   );
 
-  // For each paper: the first and last author (the lead and, by convention in
-  // many fields, the senior author), its journal, and its PubMed id if any.
+  // For each paper: its authors, its journal, and its PubMed id if any.
+  const share = Math.max(2, Math.floor(AUTHOR_LOOKUPS / Math.max(1, works.length)));
   const found = new Map();
   for (const work of works) {
     const doi = String(work?.doi ?? '')
@@ -163,15 +186,11 @@ export async function lookUp(env, dois) {
       .toLowerCase();
     if (!dois.includes(doi) || found.has(doi)) continue;
 
-    const authorships = Array.isArray(work.authorships) ? work.authorships : [];
-    const authors = [authorships[0], authorships.at(-1)]
-      .map((authorship) => shortId(authorship?.author?.id, 'A'))
-      .filter(Boolean);
     const source = work.primary_location?.source;
     const pmid = /(\d+)\/?$/.exec(String(work.ids?.pmid ?? ''))?.[1] ?? null;
     found.set(doi, {
       work,
-      authors: [...new Set(authors)],
+      authors: authorIds(work.authorships, share),
       source: source?.type === 'journal' ? shortId(source.id, 'S') : null,
       pmid,
     });
@@ -210,7 +229,7 @@ export async function lookUp(env, dois) {
       metrics[doi] = null;
       continue;
     }
-    // Of the first and last author, report the one with the higher h-index.
+    // Of the paper's authors, report the one with the highest h-index.
     const author = paper.authors
       .map((id) => named(authors.get(id)))
       .filter(Boolean)
@@ -252,7 +271,8 @@ export async function handlePaperMetrics(request, url, env, ctx, shared) {
   // visitor's search, only looks up the DOIs nobody has asked about today.
   const cache = caches.default;
   const keyFor = (doi) =>
-    new Request(`${url.origin}/metrics/cache/${encodeURIComponent(doi)}`, { method: 'GET' });
+    // "v2": answers stored when only two authors per paper were looked up must not be reused.
+    new Request(`${url.origin}/metrics/cache/v2/${encodeURIComponent(doi)}`, { method: 'GET' });
   const metrics = {};
   const missing = [];
   await Promise.all(

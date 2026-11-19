@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { after, before, beforeEach, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { Miniflare, Response } from 'miniflare';
-import { MAX_DOIS, readDois } from './paper-metrics.js';
+import { MAX_DOIS, authorIds, readDois } from './paper-metrics.js';
 
 const SITE = 'https://mini-cypris.example';
 const ENDPOINT = `${SITE}/metrics`;
@@ -22,7 +22,7 @@ const id = (short) => `https://openalex.org/${short}`;
 
 /** The fake OpenAlex's whole catalogue. */
 const WORKS = {
-  // In PubMed, in a journal, with two different authors.
+  // In PubMed, in a journal, with three authors; the middle one has the highest h-index.
   '10.1000/biology': {
     doi: 'https://doi.org/10.1000/biology',
     cited_by_count: 310,
@@ -72,7 +72,7 @@ const EXPECTED = {
     fwci: 12.24,
     percentile: 98,
     rcr: 1.97,
-    author: { name: 'Senior Author', hIndex: 41 },
+    author: { name: 'Middle Author', hIndex: 99 },
     journal: { name: 'Journal of Examples', hIndex: 103 },
     publisher: { name: 'Example Press', hIndex: 893 },
   },
@@ -198,6 +198,16 @@ test('accepts DOIs and nothing else', () => {
   assert.equal(readDois({ dois: Array(MAX_DOIS + 1).fill('10.1000/abc') }), null);
 });
 
+test('a very long author list is cut to its share, keeping the first authors and the last', () => {
+  const authorships = ['A1', 'A2', 'A2', 'A3', 'A4', 'A5'].map((short) => ({
+    author: { id: id(short) },
+  }));
+  assert.deepEqual(authorIds(authorships, 10), ['A1', 'A2', 'A3', 'A4', 'A5']);
+  assert.deepEqual(authorIds(authorships, 3), ['A1', 'A2', 'A5']);
+  assert.deepEqual(authorIds([{ author: null }, {}], 3), []);
+  assert.deepEqual(authorIds(undefined, 3), []);
+});
+
 test('returns all five metrics for a paper, and null for one it cannot find', async () => {
   const missing = newDoi();
   const reply = await ask({ dois: ['10.1000/BIOLOGY', '10.1000/preprint', missing] });
@@ -214,8 +224,8 @@ test('returns all five metrics for a paper, and null for one it cannot find', as
     'sources',
     'works',
   ]);
-  // Only the first and last authors are looked up, never the ones in between.
-  assert.deepEqual(calls('authors')[0].values.sort(), ['A1', 'A2']);
+  // Every author is looked up, each once, and the highest h-index is the one reported.
+  assert.deepEqual(calls('authors')[0].values.sort(), ['A1', 'A2', 'A9']);
   // Only journals are looked up; the repository is not treated as one.
   assert.deepEqual(calls('sources')[0].values, ['S1']);
   assert.deepEqual(calls('pubs')[0].values, ['27599104']);
