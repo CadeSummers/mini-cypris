@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Subject } from 'rxjs';
 import { AiOutcome, AiQuery } from '../ai/ai-query';
+import { AI_SUGGESTIONS_STORAGE_KEY, AiSuggestionsSetting } from '../ai/ai-suggestions-setting';
 import { PlainEnglishBar } from './plain-english-bar';
 
 describe('PlainEnglishBar', () => {
@@ -30,6 +31,7 @@ describe('PlainEnglishBar', () => {
   }
 
   beforeEach(async () => {
+    localStorage.removeItem(AI_SUGGESTIONS_STORAGE_KEY);
     asked = [];
     written = [];
     const ai = {
@@ -88,6 +90,31 @@ describe('PlainEnglishBar', () => {
 
     expect(feedback()).toContain(message);
     expect(written).toEqual([]);
+  });
+
+  it('drops an answer that arrives after the visitor has searched for something else', async () => {
+    fixture.componentRef.setInput('currentQuery', 'drone');
+    await ask('papers about solar cells');
+
+    fixture.componentRef.setInput('currentQuery', 'uav AND delivery');
+    await answer({ kind: 'queries', queries: ['"solar cells"'] });
+
+    expect(written).toEqual([]);
+    expect(button().textContent).toContain('Ask');
+  });
+
+  it('says which searches reach the model, and lets the visitor turn suggestions off', async () => {
+    const note = () => el().querySelector('#question-note')!.textContent!.replace(/\s+/g, ' ');
+    const toggle = el().querySelector<HTMLInputElement>('.ai-switch input')!;
+    expect(toggle.checked).toBe(true);
+    expect(note()).toContain('every search you run from either box, is sent to an AI model');
+
+    toggle.click();
+    await fixture.whenStable();
+
+    expect(TestBed.inject(AiSuggestionsSetting).enabled()).toBe(false);
+    expect(note()).toContain('Only a question typed in this box is sent to an AI model');
+    expect(localStorage.getItem(AI_SUGGESTIONS_STORAGE_KEY)).toBe('off');
   });
 
   it('does nothing for an empty question', async () => {

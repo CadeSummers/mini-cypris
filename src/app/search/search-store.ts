@@ -32,7 +32,8 @@ export type SearchStatus = 'idle' | 'loading' | 'loaded' | 'error';
 
 /** `ready` holds CORE's counts; `unavailable` means the UI should fall back to loaded papers. */
 type AggregateState =
-  | { status: 'idle' | 'loading' | 'unavailable' }
+  | { status: 'idle' | 'unavailable' }
+  | { status: 'loading'; query: string }
   | { status: 'ready'; query: string; counts: Aggregations };
 
 export interface ChartData {
@@ -263,13 +264,15 @@ export class SearchStore {
 
     this.aggregateRequests
       .pipe(
-        tap(() => this._aggregate.set({ status: 'loading' })),
+        tap((query) => this._aggregate.set({ status: 'loading', query })),
         switchMap((query) => {
-          const cached = this.aggregateCache.get(query);
+          // Keyed by what CORE is sent, so two spellings of one query share an answer.
+          const sent = normalizeForCore(query);
+          const cached = this.aggregateCache.get(sent);
           if (cached) return of<AggregateState>({ status: 'ready', query, counts: cached });
 
-          return this.api.aggregate(normalizeForCore(query)).pipe(
-            tap((counts) => this.aggregateCache.set(query, counts)),
+          return this.api.aggregate(sent).pipe(
+            tap((counts) => this.aggregateCache.set(sent, counts)),
             map((counts): AggregateState => ({ status: 'ready', query, counts })),
             // The chart is secondary: a failure here must not break the search.
             catchError(() => of<AggregateState>({ status: 'unavailable' })),
@@ -328,7 +331,10 @@ export class SearchStore {
    */
   private aggregate(query: string): void {
     const current = this._aggregate();
-    if (current.status === 'ready' && current.query === query) return;
+    // Already shown, or already on its way: changing the limit must not ask again.
+    if ((current.status === 'ready' || current.status === 'loading') && current.query === query) {
+      return;
+    }
     this.aggregateRequests.next(query);
   }
 

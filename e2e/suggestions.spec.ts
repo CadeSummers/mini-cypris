@@ -14,6 +14,31 @@ async function search(page: Page, query: string): Promise<void> {
   await page.getByRole('button', { name: 'Search', exact: true }).click();
 }
 
+test('with suggestions switched off, a search is sent to CORE and never to the model', async ({
+  page,
+  ai,
+}) => {
+  await page.goto('/');
+  await page.getByRole('switch', { name: /Suggest related searches/ }).uncheck();
+  await expect(page.locator('#question-note')).toContainText(
+    'Your other searches go to CORE alone',
+  );
+
+  await queryBox(page).fill('drone');
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
+  await expect(cards(page)).toHaveCount(10);
+  await page.waitForTimeout(300);
+
+  await expect(suggestions(page)).toHaveCount(0);
+  expect(ai.calls).toEqual([]);
+
+  // The choice is remembered across a reload.
+  await page.reload();
+  await expect(cards(page)).toHaveCount(10);
+  await expect(page.getByRole('switch', { name: /Suggest related searches/ })).not.toBeChecked();
+  expect(ai.calls).toEqual([]);
+});
+
 test('a search that finds nothing offers a spelling correction, and clicking it searches', async ({
   page,
   core,

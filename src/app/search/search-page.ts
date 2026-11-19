@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
+import { AiSuggestionsSetting } from '../ai/ai-suggestions-setting';
 import { buildCategoryMetrics } from '../chart/category-metrics';
 import { cleanCategoryLabel } from '../chart/category-series';
 import { ChartPanel } from '../chart/chart-panel';
@@ -80,6 +81,7 @@ export function paramsFromRequest(request: SearchRequest): Record<string, string
 export class SearchPage {
   protected readonly store = inject(SearchStore);
   protected readonly metrics = inject(PaperMetricsStore);
+  protected readonly aiSuggestions = inject(AiSuggestionsSetting);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
 

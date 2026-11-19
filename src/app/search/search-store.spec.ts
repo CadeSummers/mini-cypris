@@ -394,6 +394,20 @@ describe('SearchStore', () => {
       expect(store.breakdowns()?.documentType.items).toEqual([]);
     });
 
+    it('does not ask for the same chart again while it is still on its way', () => {
+      store.search({ query: 'drone', limit: 10 });
+      http.expectOne(isSearch).flush(page([1], 50));
+      const aggregate = http.expectOne(isAggregate);
+
+      store.search({ query: 'drone', limit: 25 });
+      http.expectOne(isSearch).flush(page([1], 50));
+
+      http.expectNone(isAggregate);
+      expect(aggregate.cancelled).toBe(false);
+      aggregate.flush(years({ '2020': 40 }));
+      expect(store.chart()?.source).toBe('all');
+    });
+
     it('keeps the whole-query aggregate when the limit or year changes', () => {
       store.search({ query: 'drone', limit: 10 });
       http.expectOne(isSearch).flush(page([1], 3));

@@ -19,10 +19,28 @@
 </form>
 
 <p id="question-note" class="note">
-  Your question, and every search you run from either box, is sent to an AI model (Meta Llama 3.3,
-  run by Cloudflare). It writes the boolean query for you and suggests related searches. Please do
-  not include sensitive information.
+  @if (suggestions.enabled()) {
+    Your question, and every search you run from either box, is sent to an AI model (Meta Llama 3.3,
+    run by Cloudflare). It writes the boolean query for you and suggests related searches.
+  } @else {
+    Only a question typed in this box is sent to an AI model (Meta Llama 3.3, run by Cloudflare),
+    which writes the boolean query. Your other searches go to CORE alone.
+  }
+  Please do not include sensitive information.
 </p>
+
+<label class="ai-switch">
+  <input
+    type="checkbox"
+    role="switch"
+    [checked]="suggestions.enabled()"
+    (change)="onSuggestionsToggle($event)"
+  />
+  <span>
+    Suggest related searches with the AI model.
+    <span class="muted">Turn this off if your searches are confidential.</span>
+  </span>
+</label>
 
 <div id="question-feedback" class="feedback" aria-live="polite">
   @if (written(); as written) {
