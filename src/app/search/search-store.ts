@@ -68,6 +68,21 @@ export function hasFilter(request: SearchRequest): boolean {
   return Boolean(request.year || PHRASE_FILTERS.some(([key]) => request[key]));
 }
 
+/**
+ * CORE can list one paper twice: the same record on two pages, or two records
+ * of one paper (the same DOI) from different repositories. Keeps the first.
+ */
+export function withoutRepeats(papers: Paper[]): Paper[] {
+  const seen = new Set<string>();
+  return papers.filter((paper) => {
+    const keys = [`id:${paper.id}`];
+    if (paper.doi) keys.push(`doi:${paper.doi.trim().toLowerCase()}`);
+    if (keys.some((key) => seen.has(key))) return false;
+    for (const key of keys) seen.add(key);
+    return true;
+  });
+}
+
 /** The query actually sent to CORE: the user's query, narrowed by any chart selections. */
 export function toCoreQuery(request: SearchRequest): string {
   const filters: string[] = [];
@@ -107,6 +122,14 @@ export class SearchStore {
   private readonly _papers = signal<Paper[]>([]);
   private readonly _totalHits = signal(0);
   private readonly _error = signal<ApiError | null>(null);
+  /**
+   * Where the next page starts in CORE's result list. Counted from what CORE
+   * sent, not from the papers shown: a repeated paper is hidden, but it still
+   * took a place in the list.
+   */
+  private readonly _nextOffset = signal(0);
+  /** Set when CORE answers a page with nothing, whatever its total says. */
+  private readonly _exhausted = signal(false);
   private readonly _loadingMore = signal(false);
   private readonly _moreError = signal<ApiError | null>(null);
   private readonly _aggregate = signal<AggregateState>({ status: 'idle' });
@@ -122,10 +145,12 @@ export class SearchStore {
   readonly loadingMore = this._loadingMore.asReadonly();
   /** A failed "load more" keeps the papers already on screen and reports here. */
   readonly moreError = this._moreError.asReadonly();
-  readonly canLoadMore = computed(() => {
-    const loaded = this._papers().length;
-    return this._status() === 'loaded' && loaded < Math.min(this._totalHits(), MAX_OFFSET);
-  });
+  readonly canLoadMore = computed(
+    () =>
+      this._status() === 'loaded' &&
+      !this._exhausted() &&
+      this._nextOffset() < Math.min(this._totalHits(), MAX_OFFSET),
+  );
 
   /**
    * Year distribution for the chart. Prefers CORE's aggregate over every
@@ -191,12 +216,15 @@ export class SearchStore {
       )
       .subscribe((outcome) => {
         if (outcome.ok) {
-          this._papers.set(outcome.page.papers);
+          this._papers.set(withoutRepeats(outcome.page.papers));
           this._totalHits.set(outcome.page.totalHits);
+          this._nextOffset.set(outcome.page.offset + outcome.page.papers.length);
+          this._exhausted.set(outcome.page.papers.length === 0);
           this._status.set('loaded');
         } else {
           this._papers.set([]);
           this._totalHits.set(0);
+          this._nextOffset.set(0);
           this._error.set(outcome.error);
           this._status.set('error');
         }
@@ -211,7 +239,7 @@ export class SearchStore {
 
           this._loadingMore.set(true);
           this._moreError.set(null);
-          return this.api.search(toCoreQuery(request), request.limit, this._papers().length).pipe(
+          return this.api.search(toCoreQuery(request), request.limit, this._nextOffset()).pipe(
             map((page): Outcome => ({ ok: true, page })),
             catchError((error: unknown) => of<Outcome>({ ok: false, error: toApiError(error) })),
             // A new search (or a reset) makes this page irrelevant: drop it.
@@ -224,7 +252,10 @@ export class SearchStore {
         if (!outcome) return;
         this._loadingMore.set(false);
         if (outcome.ok) {
-          this.append(outcome.page.papers);
+          const received = outcome.page.papers;
+          this._nextOffset.update((offset) => offset + received.length);
+          this._exhausted.set(received.length === 0);
+          this._papers.update((current) => withoutRepeats([...current, ...received]));
         } else {
           this._moreError.set(outcome.error);
         }
@@ -282,6 +313,8 @@ export class SearchStore {
     this._status.set('idle');
     this._papers.set([]);
     this._totalHits.set(0);
+    this._nextOffset.set(0);
+    this._exhausted.set(false);
     this._error.set(null);
     this._loadingMore.set(false);
     this._moreError.set(null);
@@ -319,14 +352,6 @@ export class SearchStore {
       catchError((error: unknown) => of<Outcome>({ ok: false, error: toApiError(error) })),
       takeUntil(this.cancel),
     );
-  }
-
-  /** CORE can repeat a work across pages; keep the first occurrence of each id. */
-  private append(papers: Paper[]): void {
-    this._papers.update((current) => {
-      const seen = new Set(current.map((paper) => paper.id));
-      return [...current, ...papers.filter((paper) => !seen.has(paper.id))];
-    });
   }
 
   private remember(key: string, page: SearchPage): void {

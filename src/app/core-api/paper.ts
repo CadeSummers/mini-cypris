@@ -50,14 +50,30 @@ function orNull(value: string | null | undefined): string | null {
   return cleaned ? cleaned : null;
 }
 
+/** Placeholders some repositories store where a name is missing, e.g. "null null". */
+const NO_NAME = /^(?:null(?:\s+null)*|unknown|n\/a|none|-)$/i;
+
 /**
  * Some repositories append an internal id to names ("Xiao Liu (13082469)") or
  * a profile link ("Richardson, Michael ; https://orcid.org/..."). Keep the name.
+ * Returns '' for a placeholder, so the caller can drop it.
  */
 function cleanAuthor(name: string | null | undefined): string {
-  return cleanText(name)
+  const cleaned = cleanText(name)
     .replace(/[\s;,]*https?:\/\/\S*/g, '')
     .replace(/\s*\(\d+\)$/, '')
+    .trim();
+  return NO_NAME.test(cleaned) ? '' : cleaned;
+}
+
+/**
+ * Some records end the abstract with the paper's own link, often with no
+ * space before it ("...in rural areas.https://doi.org/..."). The card already
+ * links to the paper, so the trailing link is dropped.
+ */
+function cleanAbstract(value: string | null | undefined): string {
+  return cleanText(value)
+    .replace(/[\s;,(]*https?:\/\/\S+$/, '')
     .trim();
 }
 
@@ -70,7 +86,7 @@ export function toPaper(work: CoreWork): Paper {
   const id = String(work.id);
   const doi = orNull(work.doi);
   const title = cleanText(work.title);
-  const abstract = cleanText(work.abstract);
+  const abstract = cleanAbstract(work.abstract);
   return {
     id,
     title: title || 'Untitled',

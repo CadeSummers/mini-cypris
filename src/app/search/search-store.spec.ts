@@ -1,7 +1,8 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { SearchStore, hasFilter, toCoreQuery } from './search-store';
+import { Paper } from '../core-api/paper';
+import { SearchStore, hasFilter, toCoreQuery, withoutRepeats } from './search-store';
 
 const isSearch = (r: { url: string }) => r.url === '/core-api/v3/search/works/';
 const isAggregate = (r: { url: string }) => r.url === '/core-api/v3/search/works/aggregate';
@@ -11,6 +12,21 @@ const page = (ids: number[], totalHits = ids.length) => ({
   limit: 10,
   offset: 0,
   results: ids.map((id) => ({ id, title: `Paper ${id}`, yearPublished: 2020 })),
+});
+
+describe('withoutRepeats', () => {
+  const paper = (id: string, doi: string | null = null) => ({ id, doi }) as Paper;
+
+  it('keeps the first of two records with the same id or the same DOI', () => {
+    const papers = [
+      paper('1', '10.1/A'),
+      paper('2'),
+      paper('1'),
+      paper('3', '10.1/a'), // the same paper from another repository
+      paper('4'),
+    ];
+    expect(withoutRepeats(papers).map((p) => p.id)).toEqual(['1', '2', '4']);
+  });
 });
 
 describe('toCoreQuery', () => {
@@ -239,6 +255,31 @@ describe('SearchStore', () => {
 
       expect(store.loadingMore()).toBe(false);
       expect(store.papers().map((p) => p.id)).toEqual(['1', '2', '3']);
+    });
+
+    it('asks for the page after the last one CORE sent, not after the papers shown', () => {
+      store.search({ query: 'drone', limit: 2 });
+      http.expectOne(isSearch).flush(page([1, 2], 6));
+      store.loadMore();
+      http.expectOne(isSearch).flush(page([2, 3], 6)); // one repeat: 3 shown, 4 received
+
+      store.loadMore();
+      const req = http.expectOne(isSearch);
+      expect(req.request.params.get('offset')).toBe('4');
+      req.flush(page([4, 5], 6));
+
+      // All 6 places in CORE's list have been read, though only 5 papers are shown.
+      expect(store.papers().map((p) => p.id)).toEqual(['1', '2', '3', '4', '5']);
+      expect(store.canLoadMore()).toBe(false);
+    });
+
+    it('stops when CORE sends an empty page, whatever its total says', () => {
+      store.search({ query: 'drone', limit: 2 });
+      http.expectOne(isSearch).flush(page([1, 2], 50));
+      store.loadMore();
+      http.expectOne(isSearch).flush(page([], 50));
+
+      expect(store.canLoadMore()).toBe(false);
     });
 
     it('stops offering more once everything is loaded', () => {

@@ -68,6 +68,26 @@ describe('toPaper', () => {
     expect(paper.abstract).toBe('');
   });
 
+  it('drops placeholder author names such as "null null"', () => {
+    const paper = toPaper({
+      id: 1,
+      authors: [
+        { name: 'null null' },
+        { name: 'Rivera, Ana' },
+        { name: 'Unknown' },
+        { name: null },
+      ],
+    });
+    expect(paper.authors).toEqual(['Rivera, Ana']);
+  });
+
+  it('drops a link stuck on the end of an abstract, and keeps one inside it', () => {
+    const glued = toPaper({ id: 1, abstract: 'Drones in rural areas.https://doi.org/10.1/x' });
+    expect(glued.abstract).toBe('Drones in rural areas.');
+    const inside = toPaper({ id: 1, abstract: 'See https://example.org for the data set used.' });
+    expect(inside.abstract).toBe('See https://example.org for the data set used.');
+  });
+
   it('prefers the DOI as the landing page', () => {
     expect(toPaper({ id: 1, doi: '10.1000/xyz' }).url).toBe('https://doi.org/10.1000/xyz');
   });
