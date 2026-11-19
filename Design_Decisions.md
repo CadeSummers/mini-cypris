@@ -125,8 +125,10 @@ to.
 
 I chose Cloudflare for three reasons:
 
-- **Familiarity.** I have deployed on Cloudflare in a previous project, so I could spend the
-  time on the proxy's behaviour, not on learning a host.
+- **Familiarity.** I have deployed on Cloudflare before, for [Hybrasil](https://hybrasil.app)
+  ([source](https://github.com/CadeSummers/Hybrasil)), a map of every known exoplanet and star
+  system within 100 light-years, so I could spend the time on the proxy's behaviour, not on
+  learning a host.
 - **Adoption.** It is one of the most widely used edge platforms, so the setup is one a
   reviewer or teammate is likely to recognise and can maintain.
 - **Security of the key.** The key is stored as a Worker secret: encrypted, not readable
