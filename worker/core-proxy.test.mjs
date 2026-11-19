@@ -60,7 +60,9 @@ let worker;
 let visitorCount = 0;
 
 before(() => {
-  worker = startWorker({ CORE_API_KEY: TEST_KEY });
+  // The tests share one Worker, and together they make far more than ten CORE
+  // requests a minute; the shared allowance has its own test and its own Worker.
+  worker = startWorker({ CORE_API_KEY: TEST_KEY, CORE_SHARED_LIMIT: '1000' });
 });
 
 after(() => worker.dispose());
@@ -114,14 +116,33 @@ test('adds the API key on the way to CORE and never sends it to the browser', as
   assert.ok(!headerText.includes(TEST_KEY), 'key found in the response headers');
 });
 
-test('forwards the path and query string to CORE unchanged', async () => {
-  await (await get(`${SEARCH}?q=(drone%20AND%20delivery)&limit=25&offset=50`, newVisitor())).text();
+test('forwards the path and the search parameters to CORE, and nothing else', async () => {
+  const sent = `${SEARCH}?q=(drone%20AND%20delivery)&limit=25&offset=50&scroll=true&apiKey=x`;
+  await (await get(sent, newVisitor())).text();
 
-  assert.equal(
-    upstreamCalls[0].url,
-    'https://api.core.ac.uk/v3/search/works/?q=(drone%20AND%20delivery)&limit=25&offset=50',
-  );
+  const forwarded = new URL(upstreamCalls[0].url);
+  assert.equal(forwarded.origin + forwarded.pathname, 'https://api.core.ac.uk/v3/search/works/');
+  assert.deepEqual(Object.fromEntries(forwarded.searchParams), {
+    q: '(drone AND delivery)',
+    limit: '25',
+    offset: '50',
+  });
   assert.equal(upstreamCalls[0].method, 'GET');
+});
+
+test('forwards only the query and known fields of an aggregate request', async () => {
+  const visitor = newVisitor();
+  const body = { q: 'field-check', aggregations: ['yearPublished', 'fullText'], extra: true };
+  await (await post(AGGREGATE, body, visitor)).text();
+  assert.equal(
+    upstreamCalls[0].body,
+    JSON.stringify({ q: 'field-check', aggregations: ['yearPublished'] }),
+  );
+
+  const malformed = await post(AGGREGATE, { aggregations: 'yearPublished' }, visitor);
+  await malformed.text();
+  assert.equal(malformed.status, 400);
+  assert.equal(upstreamCalls.length, 1, 'a malformed request must not reach CORE');
 });
 
 test('refuses everything except the two endpoints the app uses', async () => {
@@ -253,6 +274,32 @@ test('over the limit, cached searches still work and other visitors are unaffect
   const someoneElse = await get(`${SEARCH}?q=shared-check-new`, newVisitor());
   assert.equal(someoneElse.status, 200);
   await someoneElse.text();
+});
+
+test('all visitors together get 10 new CORE requests a minute', async () => {
+  const limited = startWorker({ CORE_API_KEY: TEST_KEY });
+  const from = (query, visitor) =>
+    limited.dispatchFetch(`${SEARCH}?q=${query}`, { headers: { 'cf-connecting-ip': visitor } });
+  try {
+    // Two visitors, each well inside their own limit of 8.
+    for (let i = 1; i <= 5; i += 1) {
+      for (const visitor of ['198.51.100.1', '198.51.100.2']) {
+        const response = await from(`budget-${visitor}-${i}`, visitor);
+        assert.equal(response.status, 200);
+        await response.text();
+      }
+    }
+    upstreamCalls = [];
+
+    const eleventh = await from('budget-one-more', '198.51.100.3');
+    await eleventh.text();
+    assert.equal(eleventh.status, 429);
+    assert.equal(eleventh.headers.get('x-proxy-limit'), 'shared');
+    assert.ok(Number(eleventh.headers.get('retry-after')) <= 60);
+    assert.equal(upstreamCalls.length, 0, 'the refused request must not reach CORE');
+  } finally {
+    await limited.dispose();
+  }
 });
 
 test('answers 502 when CORE cannot be reached', async () => {

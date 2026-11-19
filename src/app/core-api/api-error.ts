@@ -43,6 +43,17 @@ export function toApiError(error: unknown): ApiError {
         retryAt: parseRetryAfter(error.headers.get('x-ratelimit-retry-after')),
       };
     }
+    // All visitors of the demo together have used the minute's allowance.
+    if (error.headers.get('x-proxy-limit') === 'shared') {
+      return {
+        kind: 'rate-limit',
+        title: 'The demo is busy',
+        detail:
+          'This demo shares one CORE allowance among all visitors, and other visitors are ' +
+          'using it right now. Searches you have already run are remembered and still work.',
+        retryAt: parseRetryAfter(error.headers.get('x-ratelimit-retry-after')),
+      };
+    }
     return {
       kind: 'rate-limit',
       title: 'CORE rate limit reached',

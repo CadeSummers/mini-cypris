@@ -26,6 +26,16 @@ export const MAX_TEXT = 300;
  */
 export const AI_VISITOR_LIMIT = 15;
 
+/**
+ * Model calls all visitors together may cause in any 24 hours. The free
+ * allowance covers roughly 300 a day; stopping a little short of it means the
+ * page reports a limit of its own, with a time, instead of running into
+ * Cloudflare's. A deployment on a paid plan can raise it with the
+ * AI_DAILY_LIMIT variable.
+ */
+export const AI_DAILY_LIMIT = 250;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 /** How long to ask a visitor to wait when Cloudflare says the model is busy. */
 const BUSY_WAIT_MS = 60_000;
 
@@ -418,9 +428,22 @@ export async function handleAiQuery(request, url, env, ctx, shared) {
   const cached = await caches.default.match(cacheKey);
   if (cached) return reply(200, await cached.json(), 'HIT');
 
-  // Only requests that will actually reach the model count against the visitor.
-  const slot = await shared.takeVisitorSlot(request, env, 'ai:', AI_VISITOR_LIMIT);
+  // Only requests that will actually reach the model count: first against the
+  // visitor, then against the allowance all visitors share. If the counter
+  // itself is broken the model is not called at all.
+  const uncounted = () => reply(503, { message: 'Plain-English search is unavailable right now.' });
+  const slot = await shared.takeVisitorSlot(request, env, 'ai:', AI_VISITOR_LIMIT, true);
+  if (slot.failed) return uncounted();
   if (!slot.allowed) return shared.visitorLimitResponse(slot.retryAt);
+  const daily = await shared.takeSharedSlot(
+    env,
+    'ai:',
+    shared.numberSetting(env.AI_DAILY_LIMIT, AI_DAILY_LIMIT),
+    DAY_MS,
+    true,
+  );
+  if (daily.failed) return uncounted();
+  if (!daily.allowed) return modelLimitResponse(daily.retryAt);
 
   let result;
   try {

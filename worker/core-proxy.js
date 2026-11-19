@@ -57,6 +57,25 @@ const EDGE_CACHE_SECONDS = { GET: 600, POST: 3600 };
 const VISITOR_LIMIT = 8;
 const VISITOR_WINDOW_MS = 60_000;
 
+/**
+ * All visitors together may cause this many CORE requests per minute. It is
+ * CORE's own allowance for the shared key: asking for more only earns a
+ * refusal from CORE, which can come with a much longer wait than a minute.
+ * A deployment with a larger CORE allowance can raise it with the
+ * CORE_SHARED_LIMIT variable.
+ */
+const SHARED_LIMIT = 10;
+
+/** The query parameters and aggregate fields the app uses; nothing else is forwarded. */
+const SEARCH_PARAMS = ['q', 'limit', 'offset'];
+const AGGREGATE_FIELDS = ['yearPublished', 'documentType', 'publisher', 'authors'];
+
+/** A positive number from a Worker variable, or the default when it is unset or not one. */
+function numberSetting(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : fallback;
+}
+
 /** Tells the app that this Worker, not CORE, refused the request. */
 const LIMIT_HEADER = 'x-proxy-limit';
 
@@ -125,24 +144,48 @@ export class VisitorLimiter extends DurableObject {
 }
 
 /**
- * Asks the visitor's limiter for permission to make one request. `scope` gives
- * a separate count per kind of request: CORE searches and model calls each
- * have their own.
+ * Asks the limiter called `name` for permission to make one request.
+ *
+ * `failClosed` decides what a broken limiter means. A CORE search is served
+ * anyway: the worst case is CORE's own refusal. A model call is refused
+ * (`failed: true`): uncounted calls could use up the whole daily allowance.
  */
-async function takeVisitorSlot(request, env, scope = '', limit = VISITOR_LIMIT) {
+async function takeSlot(env, name, limit, windowMs, failClosed) {
   const allowed = { allowed: true, retryAt: null };
   // The binding is absent in some local setups; the proxy still works without it.
   if (!env.VISITOR_LIMITER) return allowed;
 
+  try {
+    const limiter = env.VISITOR_LIMITER.get(env.VISITOR_LIMITER.idFromName(name));
+    return await limiter.take(limit, windowMs);
+  } catch {
+    return failClosed ? { allowed: false, retryAt: null, failed: true } : allowed;
+  }
+}
+
+/**
+ * One visitor's count. `scope` gives a separate count per kind of request:
+ * CORE searches and model calls each have their own.
+ */
+async function takeVisitorSlot(
+  request,
+  env,
+  scope = '',
+  limit = VISITOR_LIMIT,
+  failClosed = false,
+) {
   // Set by Cloudflare itself, so a visitor cannot spoof it to dodge the limit.
   const visitor = request.headers.get('cf-connecting-ip') ?? 'unknown';
-  try {
-    const limiter = env.VISITOR_LIMITER.get(env.VISITOR_LIMITER.idFromName(scope + visitor));
-    return await limiter.take(limit, VISITOR_WINDOW_MS);
-  } catch {
-    // If the limiter itself fails, serving the search matters more than counting it.
-    return allowed;
-  }
+  return takeSlot(env, scope + visitor, limit, VISITOR_WINDOW_MS, failClosed);
+}
+
+/**
+ * The count all visitors share. Without it, several visitors each inside
+ * their own limit (or one script changing address) could use up an allowance
+ * that belongs to everyone.
+ */
+async function takeSharedSlot(env, scope, limit, windowMs = VISITOR_WINDOW_MS, failClosed = false) {
+  return takeSlot(env, `${scope}everyone`, limit, windowMs, failClosed);
 }
 
 function visitorLimitResponse(retryAt) {
@@ -162,6 +205,48 @@ function visitorLimitResponse(retryAt) {
   );
 }
 
+function sharedLimitResponse(retryAt) {
+  const seconds = Math.max(1, Math.ceil((retryAt - Date.now()) / 1000));
+  return new Response(
+    JSON.stringify({ message: 'This demo is busy; its shared CORE allowance is in use.' }),
+    {
+      status: 429,
+      headers: {
+        'content-type': 'application/json',
+        [LIMIT_HEADER]: 'shared',
+        'retry-after': String(seconds),
+        'x-ratelimit-retry-after': new Date(retryAt).toISOString(),
+      },
+    },
+  );
+}
+
+/**
+ * The request as it will be sent to CORE: only the parameters the app uses,
+ * so the key cannot be spent on options this app never asks for. Null when an
+ * aggregate body is not the JSON the app sends.
+ */
+async function forCore(request, url) {
+  if (request.method === 'GET') {
+    const params = new URLSearchParams();
+    for (const name of SEARCH_PARAMS) {
+      const value = url.searchParams.get(name);
+      if (value !== null) params.set(name, value);
+    }
+    return { search: `?${params}`, body: undefined };
+  }
+
+  let sent;
+  try {
+    sent = await request.json();
+  } catch {
+    return null;
+  }
+  if (typeof sent?.q !== 'string' || !Array.isArray(sent.aggregations)) return null;
+  const aggregations = sent.aggregations.filter((field) => AGGREGATE_FIELDS.includes(field));
+  return { search: '', body: JSON.stringify({ q: sent.q, aggregations }) };
+}
+
 async function proxyToCore(request, url, env, ctx) {
   const method = request.method;
   const path = url.pathname.replace(/^\/core-api/, '');
@@ -169,15 +254,29 @@ async function proxyToCore(request, url, env, ctx) {
     return json(404, 'This proxy only serves CORE work search and aggregation.');
   }
 
-  const body = method === 'POST' ? await request.text() : undefined;
+  const outgoing = await forCore(request, url);
+  if (!outgoing) return json(400, 'Send a query and the fields to count as JSON.');
+  const { search, body } = outgoing;
+
   const cache = caches.default;
-  const cacheKey = await cacheKeyFor(method, url, body);
+  const cacheKey = await cacheKeyFor(
+    method,
+    new URL(`${url.origin}${url.pathname}${search}`),
+    body,
+  );
   const cached = await cache.match(cacheKey);
   if (cached) return forClient(cached, method, 'HIT');
 
-  // Only requests that will actually reach CORE count against the visitor.
+  // Only requests that will actually reach CORE count: first against the
+  // visitor, then against the allowance all visitors share.
   const slot = await takeVisitorSlot(request, env);
   if (!slot.allowed) return visitorLimitResponse(slot.retryAt);
+  const shared = await takeSharedSlot(
+    env,
+    'core:',
+    numberSetting(env.CORE_SHARED_LIMIT, SHARED_LIMIT),
+  );
+  if (!shared.allowed) return sharedLimitResponse(shared.retryAt);
 
   const apiKey = (env.CORE_API_KEY ?? '').trim();
   const headers = { accept: 'application/json' };
@@ -186,7 +285,7 @@ async function proxyToCore(request, url, env, ctx) {
 
   let upstream;
   try {
-    upstream = await fetch(`${coreOrigin(env)}${path}${url.search}`, { method, headers, body });
+    upstream = await fetch(`${coreOrigin(env)}${path}${search}`, { method, headers, body });
   } catch {
     return json(502, 'Could not reach the CORE API.');
   }
@@ -232,7 +331,9 @@ export default {
     if (url.pathname.startsWith('/ai/')) {
       return handleAiQuery(request, url, env, ctx, {
         sha256Hex,
+        numberSetting,
         takeVisitorSlot,
+        takeSharedSlot,
         visitorLimitResponse,
       });
     }

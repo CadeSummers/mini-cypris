@@ -504,3 +504,27 @@ test('answers 503 when no model is configured', async () => {
     await bare.dispose();
   }
 });
+
+test('all visitors together get a fixed number of model calls a day', async () => {
+  const limited = startWorker({ AI_ORIGIN: FAKE_MODEL, AI_DAILY_LIMIT: '2' });
+  try {
+    // Two different visitors use the day's two calls.
+    for (let i = 0; i < 2; i += 1) {
+      const reply = await ask({ mode: 'translate', text: newText() }, newVisitor(), limited);
+      assert.equal(reply.status, 200);
+      await reply.arrayBuffer();
+    }
+    modelCalls = [];
+
+    const third = await ask({ mode: 'translate', text: newText() }, newVisitor(), limited);
+    await third.arrayBuffer();
+    assert.equal(third.status, 429);
+    // Reported as the model's limit, since it is everyone's and not this visitor's.
+    assert.equal(third.headers.get('x-proxy-limit'), 'model');
+    const hours = Number(third.headers.get('retry-after')) / 3600;
+    assert.ok(hours > 23.9 && hours <= 24, `retry-after was ${hours} hours`);
+    assert.equal(modelCalls.length, 0, 'the refused question must not reach the model');
+  } finally {
+    await limited.dispose();
+  }
+});

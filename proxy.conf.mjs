@@ -20,12 +20,24 @@ function readApiKey() {
     .replace(/^["']|["']$/g, '');
 }
 
+/**
+ * Plain-English search, suggestions and citation metrics run on a Cloudflare
+ * Worker (worker/ai-query.js, worker/paper-metrics.js). Under `npm start` those
+ * two paths go to the deployed demo by default, so the app runs with no
+ * Cloudflare account; they then count against the demo's limits. Set
+ * WORKER_ORIGIN to send them elsewhere, for example to `npm run preview`
+ * (http://localhost:8787).
+ */
+const workerOrigin =
+  process.env.WORKER_ORIGIN?.trim() || 'https://mini-cypris.cadetsummers.workers.dev';
+
 const apiKey = readApiKey();
 console.log(
   apiKey
     ? '[proxy] CORE API key loaded; requests are authenticated.'
     : '[proxy] No CORE_API_KEY found; CORE refuses most anonymous searches. See "API key" in the README.',
 );
+console.log(`[proxy] /ai and /metrics go to ${workerOrigin}`);
 
 export default {
   '/core-api': {
@@ -35,19 +47,8 @@ export default {
     pathRewrite: { '^/core-api': '' },
     headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
   },
-  // Plain-English search needs a language model, which runs on Cloudflare (see
-  // worker/ai-query.js). In development the request goes to the deployed
-  // Worker, so `npm start` needs no Cloudflare account. If it cannot be
-  // reached, the box says so and the rest of the app is unaffected.
-  '/ai': {
-    target: 'https://mini-cypris.cadetsummers.workers.dev',
-    changeOrigin: true,
-    secure: true,
-  },
-  // Citation metrics (worker/paper-metrics.js) likewise come from the deployed Worker.
-  '/metrics': {
-    target: 'https://mini-cypris.cadetsummers.workers.dev',
-    changeOrigin: true,
-    secure: true,
-  },
+  // If the Worker cannot be reached, those features say so and the rest of the
+  // app is unaffected.
+  '/ai': { target: workerOrigin, changeOrigin: true, secure: true },
+  '/metrics': { target: workerOrigin, changeOrigin: true, secure: true },
 };
