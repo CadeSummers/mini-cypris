@@ -19,13 +19,28 @@ import { PlainEnglishBar } from './plain-english-bar';
 import { collectHighlightTerms } from './highlight';
 import { filterPapers } from './paper-matcher';
 import { DEFAULT_LIMIT, SearchBar, clampLimit } from './search-bar';
-import { SearchRequest, SearchStore } from './search-store';
+import { SearchRequest, SearchStore, hasFilter } from './search-store';
 import { Suggestions } from './suggestions';
 
 /** A document type from the URL is put inside a quoted filter, so keep it to plain words. */
 const SAFE_TYPE = /^[\w -]{1,40}$/;
 
-/** Reads a search out of the URL (?q=…&limit=…&year=…&type=…); null when there is no query. */
+/**
+ * A publisher or author name from the URL is put inside a quoted filter too.
+ * Names contain commas, brackets and accents, so the rule is what they may not
+ * contain: a quote or backslash (which could end the phrase) or control characters.
+ */
+const SAFE_NAME = /^[^"\\\p{Cc}]{1,200}$/u;
+
+function safeName(value: string | null): string | null {
+  const name = (value ?? '').trim();
+  return SAFE_NAME.test(name) ? name : null;
+}
+
+/**
+ * Reads a search out of the URL (?q=…&limit=…&year=…&type=…&publisher=…&author=…);
+ * null when there is no query.
+ */
 export function requestFromParams(params: ParamMap): SearchRequest | null {
   const query = (params.get('q') ?? '').trim();
   if (!query) return null;
@@ -37,6 +52,8 @@ export function requestFromParams(params: ParamMap): SearchRequest | null {
     limit: clampLimit(params.get('limit')),
     year: /^\d{4}$/.test(year) ? Number(year) : null,
     documentType: SAFE_TYPE.test(type) ? type : null,
+    publisher: safeName(params.get('publisher')),
+    author: safeName(params.get('author')),
   };
 }
 
@@ -47,6 +64,8 @@ export function paramsFromRequest(request: SearchRequest): Record<string, string
     limit: request.limit === DEFAULT_LIMIT ? null : request.limit,
     year: request.year ?? null,
     type: request.documentType ?? null,
+    publisher: request.publisher ?? null,
+    author: request.author ?? null,
   };
 }
 
@@ -97,19 +116,37 @@ export class SearchPage {
     return type ? cleanCategoryLabel(type, 'documentType') || type : null;
   });
 
-  /**
-   * True when the query itself found nothing. With a year or type selected, an
-   * empty list more likely means the filter is too narrow than a misspelling.
-   */
-  protected readonly noResults = computed(() => {
-    const request = this.store.request();
-    return (
-      this.store.status() === 'loaded' &&
-      this.store.totalHits() === 0 &&
-      !request?.year &&
-      !request?.documentType
-    );
+  /** The selected publisher and author as the charts label them. */
+  protected readonly publisherLabel = computed(() => {
+    const publisher = this.store.request()?.publisher;
+    return publisher ? cleanCategoryLabel(publisher, 'publisher') || publisher : null;
   });
+  protected readonly authorLabel = computed(() => {
+    const author = this.store.request()?.author;
+    return author ? cleanCategoryLabel(author, 'authors') || author : null;
+  });
+
+  /** True when a chart selection is narrowing the list. */
+  protected readonly filtered = computed(() => {
+    const request = this.store.request();
+    return request ? hasFilter(request) : false;
+  });
+
+  /**
+   * True when the query itself found nothing. With a chart selection applied, an
+   * empty list more likely means the selection is too narrow than a misspelling.
+   */
+  protected readonly noResults = computed(
+    () => this.store.status() === 'loaded' && this.store.totalHits() === 0 && !this.filtered(),
+  );
+
+  /**
+   * True while a new search is on its way and an earlier list is still held.
+   * That list stays on screen, dimmed, so the page does not go blank in between.
+   */
+  protected readonly showingStale = computed(
+    () => this.store.status() === 'loading' && this.store.papers().length > 0,
+  );
 
   /**
    * True when CORE answered this query with an error instead of papers. Other
@@ -188,6 +225,8 @@ export class SearchPage {
       ...request,
       year: same ? current.year : null,
       documentType: same ? current.documentType : null,
+      publisher: same ? current.publisher : null,
+      author: same ? current.author : null,
     });
   }
 
@@ -204,6 +243,16 @@ export class SearchPage {
   protected onTypeSelected(documentType: string | null): void {
     const current = this.store.request();
     if (current) this.navigate({ ...current, documentType });
+  }
+
+  protected onPublisherSelected(publisher: string | null): void {
+    const current = this.store.request();
+    if (current) this.navigate({ ...current, publisher });
+  }
+
+  protected onAuthorSelected(author: string | null): void {
+    const current = this.store.request();
+    if (current) this.navigate({ ...current, author });
   }
 
   protected onSortChange(event: Event): void {

@@ -30,7 +30,13 @@
           } @else {
             <span class="label">{{ item.label }}</span>
           }
-          <span class="track" aria-hidden="true">
+          <!-- The bar is a mouse shortcut for the name's button, like the year chart's bars. -->
+          <span
+            class="track"
+            aria-hidden="true"
+            [class.clickable]="selectable() && item.value !== null"
+            (click)="selectable() && item.value !== null && pick(item.value)"
+          >
             <span
               class="bar"
               [class.faded]="selected() !== null && item.value !== selected()"

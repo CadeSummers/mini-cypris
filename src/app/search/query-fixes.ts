@@ -18,8 +18,15 @@ export interface QueryTip {
  */
 const FIELD_ALIASES: Record<string, string> = {
   year: 'yearPublished',
-  author: 'authors',
 };
+
+/**
+ * The field CORE searches author names in. Its documented `authors:` is
+ * accepted but matches nothing inside a boolean query (checked against the
+ * live API on 2026-11-19: `authors:"Alkouz, Balsam"` found 0 papers where
+ * `authors/name:"Alkouz, Balsam"` found the 20 the chart counts).
+ */
+export const CORE_AUTHOR_FIELD = 'authors/name';
 
 const OPERATOR = /^(?:AND|OR|NOT)$/;
 
@@ -40,13 +47,18 @@ function outsideQuotes(text: string, change: (part: string) => string): string {
  *   answers with a server error when every term in a query is written that
  *   way: "exoplanet" fails where exoplanet works. Phrases of two or more
  *   words, and quoted values after a field name, are not touched.
+ * - `authors:` and `author:` are sent as `authors/name:`, the field CORE
+ *   really searches (see CORE_AUTHOR_FIELD).
  */
 export function normalizeForCore(query: string): string {
-  return query
+  const tidied = query
     .replace(/[“”]/g, '"')
     .replace(/(^|[\s(])"([^"\s():]+)"(?=[\s)]|$)/g, (whole, before: string, word: string) =>
       OPERATOR.test(word) ? whole : before + word,
     );
+  return outsideQuotes(tidied, (part) =>
+    part.replace(/(^|[\s(])authors?(?=:)/gi, `$1${CORE_AUTHOR_FIELD}`),
+  );
 }
 
 /**
@@ -68,7 +80,7 @@ export function findQueryTip(text: string): QueryTip | null {
     };
   }
 
-  const alias = /(?:^|[\s(])(year|author)(?=[:<>=])/i.exec(unquoted)?.[1];
+  const alias = /(?:^|[\s(])(year)(?=[:<>=])/i.exec(unquoted)?.[1];
   if (alias) {
     const field = FIELD_ALIASES[alias.toLowerCase()];
     return {

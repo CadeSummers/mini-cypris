@@ -65,6 +65,14 @@ h2 {
   background: var(--bg);
 }
 
+.track.clickable {
+  cursor: pointer;
+
+  &:hover .bar {
+    background: var(--accent-strong);
+  }
+}
+
 .bar {
   display: block;
   height: 100%;

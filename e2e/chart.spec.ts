@@ -120,7 +120,76 @@ test('choosing a document type lists that type, and combines with a year', async
   await expect(page).toHaveURL(/year=2023/);
 });
 
-test('publishers and authors cannot be picked, and nor can types in the fallback', async ({
+test('choosing a publisher lists its papers, by its name or by its bar', async ({ page, core }) => {
+  await runSearch(page);
+  const switcher = page.getByRole('group', { name: 'Chart the matching papers by' });
+  const ranked = page.locator('app-ranked-chart');
+
+  await switcher.getByRole('button', { name: 'Publisher' }).click();
+  await expect(ranked).toContainText('Click a publisher to list its papers.');
+  await expect(ranked).toContainText('can also list papers CORE files under a similar name');
+
+  // The bar itself is clickable, like a bar of the year chart.
+  await ranked.getByRole('listitem').nth(1).locator('.track').click();
+  await expect(page).toHaveURL(/publisher=Logistics(\+|%20)Review/);
+  await expect(page.getByRole('status')).toContainText('from publisher Logistics Review');
+  expect(core.searches.at(-1)?.q).toBe(`(${QUERY}) AND publisher:"Logistics Review"`);
+  await expect(
+    ranked.getByRole('button', { name: 'List papers from publisher Logistics Review' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  // The chart still describes the whole query, and was not fetched again.
+  await expect(ranked.getByRole('listitem').first()).toContainText('412');
+  expect(core.aggregates).toHaveLength(1);
+
+  // Picking another replaces it; the chip removes it.
+  await ranked
+    .getByRole('button', { name: 'List papers from publisher Aerial Systems Society' })
+    .click();
+  await expect
+    .poll(() => core.searches.at(-1)?.q)
+    .toBe(`(${QUERY}) AND publisher:"Aerial Systems Society"`);
+  await page.getByRole('button', { name: /Publisher: Aerial Systems Society/ }).click();
+  await expect(page).not.toHaveURL(/publisher=/);
+  // The unfiltered list comes back from the app's own cache, with no new request.
+  await expect(page.getByRole('status')).not.toContainText('from publisher');
+  await expect(cards(page)).toHaveCount(10);
+});
+
+test('choosing an author lists their papers, and combines with a year', async ({ page, core }) => {
+  await page.goto('/?q=drone&year=2023');
+  await expect(cards(page).first()).toBeVisible();
+  const switcher = page.getByRole('group', { name: 'Chart the matching papers by' });
+  const ranked = page.locator('app-ranked-chart');
+
+  await switcher.getByRole('button', { name: 'Author' }).click();
+  await ranked.getByRole('button', { name: 'List papers by Rivera, Ana' }).click();
+
+  await expect(page).toHaveURL(/author=Rivera/);
+  await expect(page).toHaveURL(/year=2023/);
+  await expect(page.getByRole('status')).toContainText('by Rivera, Ana');
+  // Sent to the field CORE really searches author names in.
+  expect(core.searches.at(-1)?.q).toBe(
+    '(drone) AND yearPublished:2023 AND authors/name:"Rivera, Ana"',
+  );
+
+  // Clicking the selected bar again removes the selection.
+  await ranked.getByRole('listitem').first().locator('.track').click();
+  await expect(page).not.toHaveURL(/author=/);
+  await expect(page).toHaveURL(/year=2023/);
+});
+
+test('a shared link with a publisher and an author opens filtered', async ({ page, core }) => {
+  await page.goto('/?q=drone&publisher=Open%20Flight%20Press&author=Chen%2C%20Wei');
+  await expect(cards(page).first()).toBeVisible();
+
+  expect(core.searches.at(-1)?.q).toBe(
+    '(drone) AND publisher:"Open Flight Press" AND authors/name:"Chen, Wei"',
+  );
+  await expect(page.getByRole('button', { name: /Publisher: Open Flight Press/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Author: Chen, Wei/ })).toBeVisible();
+});
+
+test('nothing can be picked in the fallback, where the bars count loaded papers only', async ({
   page,
   core,
 }) => {
@@ -128,17 +197,16 @@ test('publishers and authors cannot be picked, and nor can types in the fallback
   const switcher = page.getByRole('group', { name: 'Chart the matching papers by' });
   const ranked = page.locator('app-ranked-chart');
 
-  await switcher.getByRole('button', { name: 'Publisher' }).click();
-  await expect(ranked.getByRole('listitem').first()).toBeVisible();
-  await expect(ranked.getByRole('button')).toHaveCount(0);
-
   core.onAggregate(() => ({ status: 500, body: {} }));
   await page.getByLabel('Boolean search').fill('another query');
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   await expect(cards(page)).toHaveCount(10);
-  await switcher.getByRole('button', { name: 'Document type' }).click();
-  await expect(ranked.getByRole('listitem').first()).toBeVisible();
-  await expect(ranked.getByRole('button')).toHaveCount(0);
+  for (const view of ['Document type', 'Publisher', 'Author']) {
+    await switcher.getByRole('button', { name: view }).click();
+    await expect(ranked.getByRole('listitem').first()).toBeVisible();
+    await expect(ranked.locator('ol').getByRole('button')).toHaveCount(0);
+    await expect(ranked.locator('.track.clickable')).toHaveCount(0);
+  }
 });
 
 test('if the counts fail, the papers still load and the chart says what it shows', async ({

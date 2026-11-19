@@ -174,7 +174,9 @@ Mapped to the steps in the project brief:
 21. **Forgiving queries.** CORE answers some harmless queries with a server error (for
     example `"exoplanet"`, a quoted single word). The app repairs those on the way out,
     offers one-click fixes for lowercase operators and wrong field names, and reports a
-    rejected query as a query problem instead of an outage.
+    rejected query as a query problem instead of an outage. An author filter
+    (`authors:"Smith, Jane"`) is sent to the field CORE really searches; CORE's documented
+    `authors:` matches nothing.
 22. **Citation metrics.** Where a paper has a DOI that OpenAlex knows, its card shows the
     citation count, Field-Weighted Citation Impact (FWCI), Relative Citation Ratio (RCR, for
     PubMed papers) and the h-index of an author, the journal and the publisher. Loaded
@@ -189,6 +191,14 @@ Mapped to the steps in the project brief:
     empty start page.
 25. **Light and dark theme.** A sun and moon switch at the top right. The page follows the
     device setting until a choice is made, then remembers it. See `Design_Decisions.md` 8a.
+26. **Click-through on every chart.** Clicking a document type, publisher or author (the
+    name or its bar) lists that value's papers, as clicking a year does. Selections combine,
+    show as removable chips and live in the URL. See `Design_Decisions.md` 9b.
+27. **No blank page between searches.** The previous papers stay on screen, dimmed, until the
+    new ones arrive.
+28. **Filters in plain English.** "Journal articles about graphene batteries published by
+    Elsevier since 2019" or "papers by Jane Goodall on chimpanzees" become queries with the
+    right document type, publisher, author and years. See `Design_Decisions.md` 7b.
 
 ## Project layout
 
@@ -211,6 +221,9 @@ e2e-worker/     browser tests of the built app and the Worker together, and thei
 
 ## Known limitations
 
+- Clicking a publisher with a one-word name can list more papers than its bar counts,
+  because CORE matches the word inside longer publisher names too. A note under the chart
+  says so, and the list always shows its real total.
 - A deployed copy shares one CORE key, and therefore one rate limit, among all its visitors.
   The Worker caches repeated queries (searches for 10 minutes, year counts for an hour) and
   limits each visitor to 8 new CORE requests a minute, but several visitors searching at

@@ -1,5 +1,20 @@
 import { findQueryTip, normalizeForCore } from './query-fixes';
 
+describe('normalizeForCore and authors', () => {
+  it('sends authors: and author: as the field CORE really searches', () => {
+    expect(normalizeForCore('drone AND authors:smith')).toBe('drone AND authors/name:smith');
+    expect(normalizeForCore('(author:"Smith, Jane" OR Authors:"Jane Smith")')).toBe(
+      '(authors/name:"Smith, Jane" OR authors/name:"Jane Smith")',
+    );
+  });
+
+  it('leaves the word alone inside a phrase or as a search term', () => {
+    expect(normalizeForCore('"authors: a study" AND coauthors:x AND authors')).toBe(
+      '"authors: a study" AND coauthors:x AND authors',
+    );
+  });
+});
+
 describe('normalizeForCore', () => {
   it('removes quotes around single words, which CORE fails on', () => {
     expect(normalizeForCore('"Abiogenesis" AND "Exoplanet"')).toBe('Abiogenesis AND Exoplanet');
@@ -38,8 +53,9 @@ describe('findQueryTip', () => {
 
   it('corrects field names CORE does not have', () => {
     expect(findQueryTip('drone AND year>=2020')?.fixed).toBe('drone AND yearPublished>=2020');
-    expect(findQueryTip('(author:"Jane Smith")')?.fixed).toBe('(authors:"Jane Smith")');
     expect(findQueryTip('yearPublished:2020 AND authors:smith')).toBeNull();
+    // "author" needs no fix: it is sent to CORE as the field that works.
+    expect(findQueryTip('(author:"Jane Smith")')).toBeNull();
     expect(findQueryTip('"year: 2020"')).toBeNull();
   });
 });

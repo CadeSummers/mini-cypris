@@ -21,8 +21,12 @@
   [loading]="store.chartLoading()"
   [selectedYear]="store.request()?.year ?? null"
   [selectedType]="store.request()?.documentType ?? null"
+  [selectedPublisher]="store.request()?.publisher ?? null"
+  [selectedAuthor]="store.request()?.author ?? null"
   (yearSelected)="onYearSelected($event)"
   (typeSelected)="onTypeSelected($event)"
+  (publisherSelected)="onPublisherSelected($event)"
+  (authorSelected)="onAuthorSelected($event)"
 />
 
 <section class="results" aria-label="Search results" [attr.aria-busy]="store.loading()">
@@ -47,6 +51,12 @@
             @if (typeLabel(); as type) {
               of type <strong>{{ type }}</strong>
             }
+            @if (publisherLabel(); as publisher) {
+              from publisher <strong>{{ publisher }}</strong>
+            }
+            @if (authorLabel(); as author) {
+              by <strong>{{ author }}</strong>
+            }
           </p>
         }
       }
@@ -62,7 +72,7 @@
     />
   }
 
-  @if (store.request()?.year || typeLabel()) {
+  @if (filtered()) {
     <p class="filters">
       @if (store.request()?.year; as year) {
         <button type="button" class="filter-chip" (click)="onYearSelected(null)">
@@ -78,21 +88,46 @@
           <span class="visually-hidden">Remove document type filter</span>
         </button>
       }
+      @if (publisherLabel(); as publisher) {
+        <button type="button" class="filter-chip" (click)="onPublisherSelected(null)">
+          Publisher: {{ publisher }}
+          <span aria-hidden="true">×</span>
+          <span class="visually-hidden">Remove publisher filter</span>
+        </button>
+      }
+      @if (authorLabel(); as author) {
+        <button type="button" class="filter-chip" (click)="onAuthorSelected(null)">
+          Author: {{ author }}
+          <span aria-hidden="true">×</span>
+          <span class="visually-hidden">Remove author filter</span>
+        </button>
+      }
     </p>
   }
 
   @switch (store.status()) {
     @case ('loading') {
-      <ul class="paper-list" aria-hidden="true">
-        @for (i of skeletons; track i) {
-          <li class="skeleton">
-            <span class="line title"></span>
-            <span class="line short"></span>
-            <span class="line"></span>
-            <span class="line"></span>
-          </li>
-        }
-      </ul>
+      @if (showingStale()) {
+        <!-- The previous list, dimmed and switched off, until the new one replaces it. -->
+        <ul class="paper-list stale" aria-hidden="true" inert>
+          @for (paper of visiblePapers(); track paper.id) {
+            <li>
+              <app-paper-card [paper]="paper" [metrics]="metrics.for(paper)" />
+            </li>
+          }
+        </ul>
+      } @else {
+        <ul class="paper-list" aria-hidden="true">
+          @for (i of skeletons; track i) {
+            <li class="skeleton">
+              <span class="line title"></span>
+              <span class="line short"></span>
+              <span class="line"></span>
+              <span class="line"></span>
+            </li>
+          }
+        </ul>
+      }
     }
 
     @case ('error') {
@@ -248,6 +283,12 @@
             }
             @if (typeLabel(); as type) {
               of type {{ type }}
+            }
+            @if (publisherLabel(); as publisher) {
+              from publisher {{ publisher }}
+            }
+            @if (authorLabel(); as author) {
+              by {{ author }}
             }
             . Try fewer AND terms, add alternatives with OR, or check spelling.
           </p>

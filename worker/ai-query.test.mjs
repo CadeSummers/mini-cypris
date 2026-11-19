@@ -398,6 +398,34 @@ test('a model that is taking no more calls answers 429 with the time to come bac
   await retried.arrayBuffer();
 });
 
+test('a query written for CORE with authors/name is accepted, and shown back as authors', async () => {
+  assert.equal(isSafeCoreQuery('drone AND authors/name:"Alkouz, Balsam"'), true);
+  assert.equal(isSafeCoreQuery('drone AND authors/email:x'), false);
+  assert.equal(isSafeCoreQuery('drone AND publisher/name:x'), false);
+
+  modelReply = () =>
+    answer({
+      ok: true,
+      queries: ['uav AND authors/name:"Alkouz, Balsam"', 'drone AND authors:Alkouz'],
+      reason: '',
+    });
+  const reply = await ask({ mode: 'related', text: 'drone AND authors/name:"Alkouz, Balsam"' });
+  assert.deepEqual(await reply.json(), {
+    ok: true,
+    queries: ['uav AND authors:"Alkouz, Balsam"', 'drone AND authors:Alkouz'],
+  });
+});
+
+test('the prompt tells the model the document types CORE uses and how to write names', async () => {
+  const reply = await ask({ mode: 'translate', text: newText() });
+  await reply.arrayBuffer();
+  const system = modelCalls.at(-1).messages[0].content;
+  assert.match(system, /"journal article", "conference paper"/);
+  assert.match(system, /authors:"Smith, Jane" OR authors:"Jane Smith"/);
+  assert.match(system, /publisher:Elsevier/);
+  assert.doesNotMatch(system, /DOCUMENT_TYPES|CURRENT_YEAR/);
+});
+
 test("tells Cloudflare's two volume errors apart from other failures", () => {
   const now = Date.UTC(2026, 10, 19, 18, 30);
 

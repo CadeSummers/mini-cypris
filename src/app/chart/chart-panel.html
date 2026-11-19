@@ -29,12 +29,12 @@
     [series]="rankedSeries()"
     [source]="source()"
     [loading]="loading()"
-    [selectable]="canPickType()"
-    [selected]="dimension() === 'documentType' ? selectedType() : null"
-    [hint]="typeHint"
-    pickLabel="List papers of type"
+    [selectable]="canPick()"
+    [selected]="selected()"
+    [hint]="text.hint"
+    [pickLabel]="text.pickLabel"
     [metrics]="rankedMetrics()"
     [nameHeading]="text.column"
-    (itemSelected)="typeSelected.emit($event)"
+    (itemSelected)="onPicked($event)"
   />
 }

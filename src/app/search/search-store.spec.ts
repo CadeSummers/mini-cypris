@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { SearchStore, toCoreQuery } from './search-store';
+import { SearchStore, hasFilter, toCoreQuery } from './search-store';
 
 const isSearch = (r: { url: string }) => r.url === '/core-api/v3/search/works/';
 const isAggregate = (r: { url: string }) => r.url === '/core-api/v3/search/works/aggregate';
@@ -37,6 +37,56 @@ describe('toCoreQuery', () => {
   });
 });
 
+describe('toCoreQuery with a publisher or an author', () => {
+  it('narrows to a publisher as a phrase', () => {
+    expect(toCoreQuery({ query: 'a OR b', limit: 10, publisher: 'Elsevier BV' })).toBe(
+      '(a OR b) AND publisher:"Elsevier BV"',
+    );
+  });
+
+  it('narrows to an author through the field CORE really searches', () => {
+    expect(toCoreQuery({ query: 'a', limit: 10, author: 'Alkouz, Balsam' })).toBe(
+      '(a) AND authors/name:"Alkouz, Balsam"',
+    );
+  });
+
+  it('sends an author typed into the query to that field too', () => {
+    expect(toCoreQuery({ query: 'drone AND authors:smith', limit: 10 })).toBe(
+      'drone AND authors/name:smith',
+    );
+    expect(toCoreQuery({ query: 'author:"Jane Smith" OR "authors: a title"', limit: 10 })).toBe(
+      'authors/name:"Jane Smith" OR "authors: a title"',
+    );
+  });
+
+  it('combines every selection, in a fixed order', () => {
+    expect(
+      toCoreQuery({
+        query: 'a',
+        limit: 10,
+        year: 2021,
+        documentType: 'thesis',
+        publisher: 'MDPI AG',
+        author: 'Chen, Wei',
+      }),
+    ).toBe(
+      '(a) AND yearPublished:2021 AND documentType:"thesis" AND publisher:"MDPI AG" AND authors/name:"Chen, Wei"',
+    );
+  });
+
+  it('cannot be broken out of by a name containing quotes or backslashes', () => {
+    expect(toCoreQuery({ query: 'a', limit: 10, publisher: 'Evil" OR title:"x\\' })).toBe(
+      '(a) AND publisher:"Evil OR title: x"',
+    );
+  });
+
+  it('knows when a selection is narrowing the list', () => {
+    expect(hasFilter({ query: 'a', limit: 10 })).toBe(false);
+    expect(hasFilter({ query: 'a', limit: 10, year: 2020 })).toBe(true);
+    expect(hasFilter({ query: 'a', limit: 10, author: 'Chen, Wei' })).toBe(true);
+  });
+});
+
 describe('SearchStore', () => {
   let store: SearchStore;
   let http: HttpTestingController;
@@ -69,6 +119,8 @@ describe('SearchStore', () => {
       limit: 10,
       year: null,
       documentType: null,
+      publisher: null,
+      author: null,
     });
 
     http.expectOne(isSearch).flush(page([1, 2]));
@@ -154,6 +206,8 @@ describe('SearchStore', () => {
       limit: 10,
       year: 2021,
       documentType: null,
+      publisher: null,
+      author: null,
     });
   });
 

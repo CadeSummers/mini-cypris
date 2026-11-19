@@ -644,11 +644,17 @@ CORE then reports as a 500.
    request to CORE is tidied. Silently editing someone's query in front of them is worse
    than a quiet repair they never need to think about.
 3. **Slips the app cannot safely repair get a tip with a one-click fix:** lowercase
-   `and`/`or`/`not` (they may be meant as words), and the field names `year` and `author`
-   (CORE's are `yearPublished` and `authors`).
-4. **A 500 whose message says the backend answered 400 is reported as "CORE could not
-   understand that query",** not as a temporary outage. Retrying never helps, so the message
-   should not suggest it.
+   `and`/`or`/`not` (they may be meant as words), and the field name `year` (CORE's is
+   `yearPublished`).
+4. **`authors:` and `author:` are sent to CORE as `authors/name:`** (added 2026-11-19).
+   CORE accepts `authors:` inside a boolean query and then matches nothing:
+   `(drone AND delivery) AND authors:"Alkouz, Balsam"` found 0 papers, while
+   `authors/name:"Alkouz, Balsam"` found 20, the number CORE's own author count gives. Until
+   this change every author filter in the app, typed or written by the model, silently
+   returned nothing. As with the quotes, the box and the URL keep what was typed.
+5. **A 500 whose message says the backend answered 400 is reported as a query CORE could
+   not understand,** not as a temporary outage. Retrying never helps, so the message should
+   not suggest it.
 
 **Trade-offs.**
 
@@ -708,6 +714,27 @@ prompt can be argued with; these cannot:
 
 The most a successful prompt injection can do is make the model write a different search
 query, which the user sees in the Boolean box before anything else happens.
+
+**Filters in plain English (added 2026-11-19).** Asking for a publisher, an author or a kind
+of document used to work poorly, for three reasons found by running the model's queries
+against CORE:
+
+- **Authors found nothing,** because of the `authors:` fault in 7a. Fixed there, for every
+  query.
+- **Name order matters.** CORE stores most names as "Surname, Given":
+  `authors/name:"Alkouz, Balsam"` found 20 papers and `"Balsam Alkouz"` found 3. The prompt
+  now asks for both orders joined with OR for a full name, and the bare surname when that is
+  all the user gave.
+- **The model did not know CORE's document types** and dropped "journal articles" from a
+  request altogether. The prompt now lists the types CORE uses (from its own counts) and
+  says which everyday words map to which, and that every filter the request states must
+  appear in the query.
+- **Publisher** is written as the one identifying word (`publisher:Elsevier`), which is how
+  CORE matches it and what a person asking in plain English means.
+
+No field was added. I tried the other candidates against CORE: `language`, `fullText`,
+`citationCount` and `dataProviders` are refused, and `fieldOfStudy` is accepted but nearly
+empty (7 of about 1,200 papers on drone delivery carry it).
 
 **The query is never hidden.** It appears in the Boolean box, where it can be read and
 edited, and in the URL. Reloading or sharing the link runs the search without calling the
@@ -886,7 +913,14 @@ typed, actionable messages. A failed "load more" keeps the papers already shown.
   (401/403), retry (5xx), check the connection (offline). One generic message hides that.
 - On a rate limit the app reads CORE's `x-ratelimit-retry-after` header and shows the time at
   which searching will work again.
-- Skeleton cards keep the layout stable while loading, and respect `prefers-reduced-motion`.
+- Skeleton cards keep the layout stable while the first search loads, and respect
+  `prefers-reduced-motion`.
+- **From the second search on, the previous papers stay on screen, dimmed, until the new
+  ones arrive** (added 2026-11-19). A list that fades and is replaced feels faster than one
+  that blanks and reappears, and the page does not jump. The dimmed list is `inert` and
+  hidden from screen readers, so nobody can open or be read a paper that is about to be
+  replaced; the status line above says what is being searched. After an error there is no
+  earlier list to keep, so the skeletons are used.
 - Status changes are announced through an `aria-live` region.
 
 **Alternatives.**
@@ -1022,11 +1056,10 @@ counted by CORE over every matching paper.
 
 **Trade-offs, stated plainly.**
 
-- **Publisher and author bars are read-only.** I tested using the values as filters:
-  `documentType:"thesis"` returned exactly the charted count, but `publisher:"IEEE"` returned
-  3,395 papers against a bar of 1,622 (CORE matches the word, not the exact name) and an
-  author filter returned none. A click that lists a different number of papers than the bar
-  shows would be worse than no click. Document types can be picked; see section 9b.
+- **Publisher and author bars were read-only at first, and can now be clicked** (9b). My
+  first test of the values as filters found `publisher:"IEEE"` returning 3,395 papers
+  against a bar of 1,622 and an author filter returning none, so I left them out. Both
+  findings were incomplete; see 9b for what changed.
 - **CORE returns its 100 largest values per field,** so the lists are a top ten, with no
   "other" total, and merging after cleaning can only combine values within that 100.
 - **The chosen view is not in the URL.** It is a way of looking at the data, not part of the
@@ -1053,6 +1086,33 @@ _Brief step 6 (the chart), step 8 (additions)._
 **Decision.** In the "Document type" view, each type's name is a button. Clicking "Thesis"
 lists only the theses that match the query. The choice is shown as a removable chip, lives
 in the URL (`type=thesis`), and combines with a year chosen from the year chart.
+
+**Extended on 2026-11-19 to publishers and authors, and to the bars themselves.** Every
+ranked chart now filters on a click, like the year chart: the name is the button, and the
+bar beside it does the same for the mouse. The URL carries `publisher=` and `author=`, each
+with its own chip, and all four selections combine with AND.
+
+This reverses the "read-only" decision in 9a, on the product owner's request and on better
+measurements (live CORE, `drone AND delivery`):
+
+| Filter sent                                                  | Bar | List |
+| ------------------------------------------------------------ | --- | ---- |
+| `publisher:"Elsevier BV"`                                    | 163 | 163  |
+| `publisher:"MDPI AG"`                                        | 122 | 123  |
+| `publisher:"Multidisciplinary Digital Publishing Institute"` | 185 | 191  |
+| `publisher:Elsevier` (a one-word name)                       | 61  | 253  |
+| `authors:"Alkouz, Balsam"`                                   | 20  | 0    |
+| `authors/name:"Alkouz, Balsam"`                              | 20  | 20   |
+| `authors/name:"Bouguettaya, Athman"`                         | 18  | 21   |
+
+- **Authors work through `authors/name:`** (7a) and match the bar exactly or within a few.
+- **Multi-word publisher names match within a few papers.** CORE matches the words of the
+  name as a phrase, so a longer name that contains it is included.
+- **One-word publisher names can list far more than the bar,** because the word also
+  matches longer names ("Elsevier" also lists "Elsevier BV"). This is the mismatch that made
+  me leave the click out. It is now allowed, with a note under the chart: "Clicking one can
+  also list papers CORE files under a similar name." The status line always gives the real
+  number of papers listed.
 
 **Why.**
 
@@ -1090,13 +1150,21 @@ in the URL (`type=thesis`), and combines with a year chosen from the year chart.
 - **The type's name is the button, not the bar.** A name is a clear, focusable target with
   text for a screen reader; the bar is decoration. The price is that clicking the bar itself
   does nothing.
-- **`SearchRequest` now has two optional filters.** A third would justify replacing them with
-  a list of filters; two did not.
+- **`SearchRequest` now has four optional filters.** The three that are quoted phrases
+  (type, publisher, author) are built from one small table in `search-store.ts`; the year is
+  a number and stays separate.
+- **A publisher or author name from the URL is checked differently from a type.** Names
+  contain commas, brackets and accents, so the rule is what they may not contain: quotes,
+  backslashes and control characters, and at most 200 characters. The same characters are
+  removed again when the filter is built.
+- **The bar is a mouse-only shortcut,** like the bars of the year chart. The name beside it
+  is the button for the keyboard and for screen readers.
 
 **Alternatives.**
 
-- _Making publisher and author clickable too_: rejected in 9a, because the lists would not
-  match the bars.
+- _Making only multi-word publisher names clickable_: every click would then match its bar
+  closely, but "Elsevier", "IEEE" and "Springer" would be dead while their neighbours were
+  not, with no reason visible to the user.
 - _Replacing the year selection when a type is chosen_: simpler state, but it throws away a
   choice the user made.
 - _Filtering the loaded papers in the browser_: instant and free, but wrong whenever the

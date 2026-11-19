@@ -141,6 +141,66 @@ test('quotes around single words are removed on the way to CORE, which fails on 
   await expect(queryBox(page)).toHaveValue('"Abiogenesis" AND "Exoplanet"');
 });
 
+test('the previous papers stay on screen, dimmed, until the new ones arrive', async ({
+  page,
+  core,
+}) => {
+  await runSearch(page);
+  const firstTitle = await cards(page).first().getByRole('heading').innerText();
+
+  // Hold the next search so the in-between state can be looked at.
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route('**/search/works/?*', async (route) => {
+    await held;
+    await route.fallback();
+  });
+  core.onSearch((call) => ({ body: searchResponse(call.limit, call.offset, 3) }));
+  await queryBox(page).fill('another AND query');
+  await searchButton(page).click();
+
+  const stale = page.locator('.paper-list.stale');
+  await expect(stale).toBeVisible();
+  await expect(stale.locator('article')).toHaveCount(10);
+  await expect(stale.locator('article').first()).toContainText(firstTitle);
+  // Dimmed, and switched off for the mouse, the keyboard and screen readers.
+  await expect(stale).toHaveCSS('opacity', '0.45');
+  await expect(stale).toHaveAttribute('inert', '');
+  await expect(page.locator('.skeleton')).toHaveCount(0);
+  await expect(page.getByRole('status')).toContainText('Searching CORE for another AND query');
+
+  release();
+  await expect(page.locator('.paper-list.stale')).toHaveCount(0);
+  await expect(cards(page)).toHaveCount(3);
+});
+
+test('the first search shows placeholders, since there is nothing earlier to keep', async ({
+  page,
+}) => {
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route('**/search/works/?*', async (route) => {
+    await held;
+    await route.fallback();
+  });
+  await page.goto('/');
+  await queryBox(page).fill(QUERY);
+  await searchButton(page).click();
+
+  await expect(page.locator('.skeleton')).toHaveCount(3);
+  await expect(page.locator('.paper-list.stale')).toHaveCount(0);
+  release();
+  await expect(cards(page)).toHaveCount(10);
+});
+
+test('an author filter is sent to the field CORE really searches', async ({ page, core }) => {
+  await runSearch(page, 'drone AND authors:"Alkouz, Balsam"');
+
+  expect(core.searches.at(-1)?.q).toBe('drone AND authors/name:"Alkouz, Balsam"');
+  // What the user typed is left as it was.
+  await expect(queryBox(page)).toHaveValue('drone AND authors:"Alkouz, Balsam"');
+});
+
 test('a wrong field name gets a one-click fix', async ({ page, core }) => {
   await page.goto('/');
   await queryBox(page).fill('drone and year>=2020');

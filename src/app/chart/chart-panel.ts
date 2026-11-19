@@ -20,13 +20,11 @@ interface RankedText {
   /** Heading of the name column in the table. */
   column: string;
   caveat: string;
+  /** Added to the caption to say what picking a bar does. */
+  hint: string;
+  /** Start of each name button's accessible name. */
+  pickLabel: string;
 }
-
-/**
- * Only document types can be picked. CORE's filter on this field returns
- * exactly the number the bar shows; its publisher and author filters do not.
- */
-const TYPE_HINT = 'Click a type to list its papers.';
 
 const VIEWS: ViewOption[] = [
   { view: 'year', tab: 'Year' },
@@ -41,13 +39,20 @@ const RANKED_TEXT: Record<Dimension, RankedText> = {
     noun: 'document types',
     column: 'Document type',
     caveat: '',
+    hint: 'Click a type to list its papers.',
+    pickLabel: 'List papers of type',
   },
   publisher: {
     heading: 'Top publishers',
     noun: 'publishers',
     column: 'Publisher',
+    // CORE's publisher filter matches the words of a name, not the exact name, so
+    // a click can list more papers than the bar counts. The page says so.
     caveat:
-      'Publisher names are shown as CORE records them, so one publisher can appear under more than one name.',
+      'Publisher names are shown as CORE records them, so one publisher can appear under more ' +
+      'than one name. Clicking one can also list papers CORE files under a similar name.',
+    hint: 'Click a publisher to list its papers.',
+    pickLabel: 'List papers from publisher',
   },
   authors: {
     heading: 'Top authors',
@@ -55,6 +60,8 @@ const RANKED_TEXT: Record<Dimension, RankedText> = {
     column: 'Author',
     caveat:
       'Author names are shown as CORE records them, so one person can appear under more than one spelling.',
+    hint: 'Click an author to list their papers.',
+    pickLabel: 'List papers by',
   },
 };
 
@@ -76,6 +83,8 @@ export class ChartPanel {
   readonly loading = input(false);
   readonly selectedYear = input<number | null>(null);
   readonly selectedType = input<string | null>(null);
+  readonly selectedPublisher = input<string | null>(null);
+  readonly selectedAuthor = input<string | null>(null);
   /** Citation context for the publisher and author tables, from the loaded papers. */
   readonly categoryMetrics = input<Record<
     MetricDimension,
@@ -84,8 +93,8 @@ export class ChartPanel {
 
   readonly yearSelected = output<number | null>();
   readonly typeSelected = output<string | null>();
-
-  protected readonly typeHint = TYPE_HINT;
+  readonly publisherSelected = output<string | null>();
+  readonly authorSelected = output<string | null>();
 
   protected readonly views = VIEWS;
   protected readonly view = signal<ChartView>('year');
@@ -96,9 +105,33 @@ export class ChartPanel {
     return view === 'year' ? null : view;
   });
   /** Picking needs CORE's own counts: the fallback counts are of loaded papers only. */
-  protected readonly canPickType = computed(
-    () => this.dimension() === 'documentType' && this.source() === 'all',
-  );
+  protected readonly canPick = computed(() => this.dimension() !== null && this.source() === 'all');
+
+  /** The value picked in the dimension on show, if any. */
+  protected readonly selected = computed(() => {
+    switch (this.dimension()) {
+      case 'documentType':
+        return this.selectedType();
+      case 'publisher':
+        return this.selectedPublisher();
+      case 'authors':
+        return this.selectedAuthor();
+      default:
+        return null;
+    }
+  });
+
+  protected onPicked(value: string | null): void {
+    switch (this.dimension()) {
+      case 'documentType':
+        return this.typeSelected.emit(value);
+      case 'publisher':
+        return this.publisherSelected.emit(value);
+      case 'authors':
+        return this.authorSelected.emit(value);
+    }
+  }
+
   protected readonly rankedText = computed(() => {
     const dimension = this.dimension();
     return dimension ? RANKED_TEXT[dimension] : null;

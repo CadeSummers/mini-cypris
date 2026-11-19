@@ -11,7 +11,7 @@ import {
 import { ChartSource } from '../chart/year-chart';
 import { YearSeries, buildYearSeries, countByYear } from '../chart/year-series';
 import { ApiError, toApiError } from '../core-api/api-error';
-import { normalizeForCore } from './query-fixes';
+import { CORE_AUTHOR_FIELD, normalizeForCore } from './query-fixes';
 import { Aggregations, CoreApi, SearchPage } from '../core-api/core-api';
 import { Paper } from '../core-api/paper';
 
@@ -22,6 +22,10 @@ export interface SearchRequest {
   year?: number | null;
   /** Optional drill-down to one document type, as CORE spells it (e.g. "thesis"). */
   documentType?: string | null;
+  /** Optional drill-down to one publisher, as CORE records the name. */
+  publisher?: string | null;
+  /** Optional drill-down to one author, as CORE records the name. */
+  author?: string | null;
 }
 
 export type SearchStatus = 'idle' | 'loading' | 'loaded' | 'error';
@@ -47,11 +51,31 @@ const CACHE_SIZE = 20;
 /** CORE does not page beyond this many results without its scroll API. */
 const MAX_OFFSET = 10_000;
 
+/** A value as a quoted phrase; anything that could end the phrase early is taken out. */
+function phrase(value: string): string {
+  return `"${value.replace(/["\\]/g, ' ').replace(/\s+/g, ' ').trim()}"`;
+}
+
+/** The chart selections a request can carry, and the CORE field each one filters on. */
+const PHRASE_FILTERS = [
+  ['documentType', 'documentType'],
+  ['publisher', 'publisher'],
+  ['author', CORE_AUTHOR_FIELD],
+] as const;
+
+/** True when a chart selection, not the query alone, decides what is listed. */
+export function hasFilter(request: SearchRequest): boolean {
+  return Boolean(request.year || PHRASE_FILTERS.some(([key]) => request[key]));
+}
+
 /** The query actually sent to CORE: the user's query, narrowed by any chart selections. */
 export function toCoreQuery(request: SearchRequest): string {
   const filters: string[] = [];
   if (request.year) filters.push(`yearPublished:${request.year}`);
-  if (request.documentType) filters.push(`documentType:"${request.documentType}"`);
+  for (const [key, field] of PHRASE_FILTERS) {
+    const value = request[key];
+    if (value) filters.push(`${field}:${phrase(value)}`);
+  }
   const query = normalizeForCore(request.query);
   return filters.length ? [`(${query})`, ...filters].join(' AND ') : query;
 }
@@ -232,6 +256,8 @@ export class SearchStore {
       limit: request.limit,
       year: request.year ?? null,
       documentType: request.documentType ?? null,
+      publisher: request.publisher ?? null,
+      author: request.author ?? null,
     });
     this.aggregate(query);
   }
@@ -262,8 +288,8 @@ export class SearchStore {
 
   /**
    * The aggregate depends only on the base query, so changing the limit or
-   * drilling into a year or document type does not refetch it: the chart keeps showing the
-   * whole picture while the list narrows.
+   * drilling into a year, document type, publisher or author does not refetch it: the
+   * chart keeps showing the whole picture while the list narrows.
    */
   private aggregate(query: string): void {
     const current = this._aggregate();
@@ -272,7 +298,15 @@ export class SearchStore {
   }
 
   private load(request: SearchRequest) {
-    const key = `${request.limit}|${request.year ?? ''}|${request.documentType ?? ''}|${request.query}`;
+    // JSON keeps the parts apart whatever characters a name contains.
+    const key = JSON.stringify([
+      request.limit,
+      request.year ?? null,
+      request.documentType ?? null,
+      request.publisher ?? null,
+      request.author ?? null,
+      request.query,
+    ]);
     const cached = this.cache.get(key);
     if (cached) return of<Outcome>({ ok: true, page: cached });
 
