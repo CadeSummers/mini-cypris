@@ -78,7 +78,11 @@ function named(entity) {
 
 async function getJson(url) {
   const response = await fetch(url, { headers: { accept: 'application/json' } });
-  if (!response.ok) throw new Error(`${new URL(url).hostname} answered ${response.status}`);
+  if (!response.ok) {
+    const error = new Error(`${new URL(url).hostname} answered ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
   return response.json();
 }
 
@@ -266,9 +270,14 @@ export async function handlePaperMetrics(request, url, env, ctx, shared) {
   let looked;
   try {
     looked = await lookUp(env, missing);
-  } catch {
+  } catch (error) {
     // Includes OpenAlex's daily allowance running out. The papers still show.
-    return reply(503, { message: 'Citation metrics are unavailable right now.' });
+    // The status OpenAlex gave (a number, nothing more) is passed on because it
+    // tells the two likely causes apart: 429 is the allowance, 5xx is an outage.
+    return reply(503, {
+      message: 'Citation metrics are unavailable right now.',
+      upstreamStatus: typeof error?.status === 'number' ? error.status : null,
+    });
   }
 
   for (const doi of missing) {

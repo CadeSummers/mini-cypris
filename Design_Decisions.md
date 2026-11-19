@@ -238,7 +238,7 @@ passed 8 requests and refused the 9th, and a search already in the cache was sti
 _Brief step 2 (use the API responsibly), step 7 ("working" at each stage), step 8 (additions)._
 
 **Decision.** 12 tests in `worker/core-proxy.test.mjs` (the 16 for plain-English search are
-described in 7b) run the real Worker in Cloudflare's
+described in 7b, the 12 for citation metrics in 5b) run the real Worker in Cloudflare's
 runtime on my machine and in CI, with CORE replaced by a fake. They use Miniflare (the
 engine inside `wrangler dev`) as a library and Node's built-in test runner. Run them with
 `npm run test:worker`.
@@ -305,7 +305,7 @@ tests fail; I reverted it.
 
 _Brief step 7 ("working" at each stage), step 8 (additions)._
 
-**Decision.** 7 Playwright tests in `e2e-worker/` run against the production build and the
+**Decision.** 8 Playwright tests in `e2e-worker/` run against the production build and the
 Worker together, started by `wrangler dev` from the real `wrangler.jsonc`. The Worker talks
 to a small fake CORE (`e2e-worker/fake-core.ts`). Run them with `npm run e2e:worker`; CI
 runs them after the other browser tests.
@@ -434,6 +434,115 @@ both the CORE search and the in-browser refine box.
 - _Asking CORE for highlights_: its search API does not return match positions.
 
 ---
+
+### 5b. Citation metrics on each paper
+
+_Brief step 3 (presenting papers), step 8 (additions)._
+
+**Decision.** Where the data exists, a card shows a row of numbers: citation count,
+Field-Weighted Citation Impact (FWCI), Relative Citation Ratio (RCR), and the h-index of an
+author, the journal and the publisher. A "Sort loaded papers by" control orders the loaded
+papers by citations or FWCI.
+
+**Where the numbers come from, and why not from CORE or Google Scholar.**
+
+| Source                          | Finding (checked 2026-11-18)                                                                                                                            |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CORE                            | Returns `citationCount`, but it was 0 for all 46 papers sampled. None of the other metrics.                                                             |
+| Google Scholar                  | No API. Its terms forbid scraping and it blocks automated requests. No FWCI or RCR.                                                                     |
+| Scopus (the original FWCI)      | Paid licence.                                                                                                                                           |
+| **OpenAlex** (chosen)           | Free, open data (CC0), run by a US non-profit. One request per kind of thing returns citations, FWCI, and h-index for authors, journals and publishers. |
+| **NIH iCite** (chosen, for RCR) | Free, no key, US government. RCR is the NIH's own metric and iCite is its source.                                                                       |
+
+**How it works.** The app sends the DOIs of the papers on screen to a new Worker endpoint,
+`POST /metrics` (`worker/paper-metrics.js`). The Worker makes up to five batched requests:
+OpenAlex for the papers, then their authors, journals and publishers, and iCite for RCR.
+It returns only the numbers.
+
+**Why through the Worker.**
+
+- **One request from the browser instead of five,** and the joins between papers, authors,
+  journals and publishers happen in one place.
+- **Each DOI is cached for a day,** shared by all visitors, so repeated searches and "Load
+  more" cost little.
+- **An OpenAlex key can be added without it reaching the browser,** as with the CORE key.
+- **Not an open proxy.** The only input is a list of at most 100 strings, each checked
+  against the shape of a DOI. `|` and `,` are refused because they mean OR and AND in an
+  OpenAlex filter.
+- **Only DOIs of public papers leave the app.** The visitor's query is never sent to
+  OpenAlex or the NIH.
+
+**Choices inside the feature.**
+
+- **Papers are matched by DOI only.** Matching by title would cover more papers, but an
+  OpenAlex search costs ten times a lookup and can attach one paper's numbers to another
+  with a similar title. Wrong numbers are worse than none.
+- **"Author h-index" is the higher of the first and last author,** shown with that author's
+  name. The first author usually did the work and, in many fields, the last author leads the
+  group. One number for a twenty-author paper is always a simplification, so the card says
+  whose it is.
+- **Journal h-index is shown beside publisher h-index.** The publisher figure alone says
+  little (it is 1,852 for the IEEE across everything it publishes); the journal figure is
+  closer to what a reader wants. It is only shown when the venue is a journal, not a
+  repository such as Zenodo.
+- **Papers appear first; metrics fill in afterwards.** A slow or failed lookup never delays
+  or breaks the list. A partial answer (for example, iCite down) is shown but not cached.
+- **Every number is explained** on hover and in a "What do these numbers mean?" note, and
+  the page says how many loaded papers have data and where it came from.
+- **Sorting is by the loaded papers only,** and the control says so. Papers without data go
+  last. CORE cannot sort all matches by citations because it has no citation data.
+- **CORE's own citation count is no longer shown.** It was always 0, so the line never
+  appeared.
+
+**Checked against the real services.** Run locally with the production build and Worker:
+
+| Query (25 papers)                    | With a DOI | With metrics | With RCR |
+| ------------------------------------ | ---------- | ------------ | -------- |
+| `(drone AND (package OR delivery))`  | 8          | 6            | 2        |
+| `"antibiotic resistance" AND review` | 17         | 14           | 11       |
+
+The most cited drone paper showed 672 citations, FWCI 38.09, RCR 1.83, author h-index 26,
+journal h-index 792 and publisher h-index 2,530.
+
+**Trade-offs, stated plainly.**
+
+- **Coverage is partial and uneven:** a quarter of the drone papers, over half of the
+  biomedical ones. It depends on how many CORE records carry a DOI. The page states the
+  count instead of hiding it.
+- **The deployed site needs an OpenAlex key to show metrics.** Without a key OpenAlex gives
+  $0.10 a day shared by everyone on the same IP address, and Cloudflare Workers share
+  addresses. On the deployed site the first request was refused (429), while the same code
+  ran from a home connection. Until a key is added as the `OPENALEX_API_KEY` secret, the
+  site says "Citation metrics are unavailable right now" and is otherwise unaffected. A free
+  key has its own $1 a day; at up to four requests per search that is about 2,500 searches,
+  estimated.
+- **These are OpenAlex's figures.** Its FWCI is calculated from OpenAlex's own data and
+  fields, so it will differ from Scopus's. Its h-index will differ from Google Scholar's.
+- **RCR appears only on PubMed-indexed papers,** so mostly on biomedical work.
+- **Author matching is OpenAlex's.** If it has merged two people or split one, the h-index
+  is wrong, and the app cannot tell.
+- **The cards are busier.** The row is one muted line and appears only when there is data.
+- **Citation metrics are a blunt measure of a paper.** They are shown as context, with
+  explanations, and never used to hide or rank papers unless the user chooses a sort.
+
+**Alternatives.**
+
+- _Calling OpenAlex from the browser_: each visitor would then have their own keyless
+  allowance, which avoids the shared-address problem. But it sends five requests per search
+  from every visitor straight to a third party, shares nothing between visitors, and puts
+  the joining logic in the page.
+- _Semantic Scholar_: free citation counts and author h-index, but no FWCI, and its keyless
+  limit is also shared.
+- _A chart of citations for the loaded papers_: considered and left out; with data on a
+  third of the papers it would often be nearly empty.
+
+**Tests.** 12 Worker tests in `worker/paper-metrics.test.mjs` run the real Worker against a
+fake OpenAlex and iCite: all five metrics, an unknown DOI, no PubMed ID, iCite down, an
+h-index lookup failing, junk in an upstream answer, the per-DOI cache, the key attached and
+never returned, bad input, the limit and the 503. Unit tests cover the store, the sort and
+the card; browser tests cover the row, sorting, "Load more" and the unavailable state; a
+routing test covers the path through the Worker. Switching the DOI check off by hand made
+two Worker tests fail.
 
 ## 6. The "how many papers" field
 
@@ -950,7 +1059,7 @@ error mapping and URL parsing. Prettier for formatting. Every commit builds and 
 _Brief step 7 ("working" at each stage), steps 3 to 6 (each feature has a test), step 8
 (additions)._
 
-**Decision.** 32 Playwright tests in `e2e/` drive the app in a real Chromium browser. CORE is
+**Decision.** 37 Playwright tests in `e2e/` drive the app in a real Chromium browser. CORE is
 replaced at the network boundary: `e2e/mock-core.ts` answers the two endpoints the app
 calls with made-up data, records every request, and fails the test if the app calls anything
 else under `/core-api/`. They run with `npm run e2e` and as a second job in CI.
@@ -1023,3 +1132,5 @@ level-one heading, because "Mini-Cypris" in the header was a plain `<span>`. It 
 6. For plain-English search: measure how many questions the free allowance really covers,
    keep a fixed set of test questions and re-run it whenever the prompt changes, and offer a
    model with a guaranteed US location for users who need one.
+7. For citation metrics: add the OpenAlex key to the deployed site, then consider matching
+   papers without a DOI by title and year with a strict similarity check.

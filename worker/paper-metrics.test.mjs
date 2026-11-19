@@ -307,6 +307,7 @@ test('answers 503 when OpenAlex cannot find the papers, and does not remember th
   assert.equal(failed.status, 503);
   assert.deepEqual(await failed.json(), {
     message: 'Citation metrics are unavailable right now.',
+    upstreamStatus: 429,
   });
 
   sabotage = () => null;

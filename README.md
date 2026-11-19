@@ -18,6 +18,8 @@ alternatives considered, is in [Design_Decisions.md](Design_Decisions.md).
 
 ![A plain-English question turned into a boolean query, with the results and three related searches suggested below the chart](docs/plain-english.png)
 
+![Paper cards sorted by citations, each with a row of citation count, FWCI, RCR and h-index figures](docs/citation-metrics.png)
+
 | Year drill-down                                                                                     | Document type drill-down                                                                                                  | Chart by publisher                                                                        | Phone width                                                          |
 | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | ![The 2021 bar selected in the chart, with the list narrowed to that year](docs/year-drilldown.png) | ![The Thesis type selected in the document type chart, with the list narrowed to the 862 theses](docs/type-drilldown.png) | ![The ten most common publishers for the query as ranked bars](docs/chart-publishers.png) | ![The same search at a 390-pixel-wide screen](docs/search-phone.png) |
@@ -77,6 +79,9 @@ npx wrangler login                     # once; opens the browser
 npx wrangler secret put CORE_API_KEY   # paste the key when prompted; stored encrypted
 npm run deploy
 ```
+
+Optionally, for citation metrics on the deployed site, get a free key at
+<https://openalex.org/settings/api> and run `npx wrangler secret put OPENALEX_API_KEY`.
 
 If `secret put` says the Worker does not exist yet, run `npm run deploy` first, then set the
 secret. The Worker forwards only the two CORE endpoints the app uses, so the public URL
@@ -140,18 +145,18 @@ Mapped to the steps in the project brief:
 14. **Highlighted matches.** Query words are marked in each title and abstract, for both the
     CORE search and the refine box. Terms under `NOT` are left unmarked, and `title:` terms
     are marked in titles only.
-15. **Tests.** 138 unit tests covering the API service, data cleaning, the boolean parser and
+15. **Tests.** 153 unit tests covering the API service, data cleaning, the boolean parser and
     matcher, the search store (cancellation, caching, paging, fallback), chart data and URL
     handling.
-16. **End-to-end tests.** 32 Playwright tests drive the app in a real browser against a
+16. **End-to-end tests.** 37 Playwright tests drive the app in a real browser against a
     mocked CORE: search, the number of papers, invalid syntax, year and document type drill-down, refine, load
     more, both rate-limit messages, shareable URLs, the chart switcher and its fallback, plus
     two automated accessibility scans. They run in CI on every push.
-17. **Worker tests.** 28 tests run the real Worker in Cloudflare's runtime locally (Miniflare)
+17. **Worker tests.** 40 tests run the real Worker in Cloudflare's runtime locally (Miniflare)
     against a fake CORE. They check that the key is sent to CORE and never to the browser,
     that only the two allowed endpoints are proxied, that repeated queries come from the
     cache, and that a visitor's 9th new request in a minute is refused.
-18. **Routing tests.** 7 browser tests run the production build and the Worker together under
+18. **Routing tests.** 8 browser tests run the production build and the Worker together under
     `wrangler dev`, using the real `wrangler.jsonc`. They check which requests reach the
     Worker and which are served as files, and that the per-visitor limit message appears in
     the page.
@@ -168,6 +173,12 @@ Mapped to the steps in the project brief:
     example `"exoplanet"`, a quoted single word). The app repairs those on the way out,
     offers one-click fixes for lowercase operators and wrong field names, and reports a
     rejected query as a query problem instead of an outage.
+22. **Citation metrics.** Where a paper has a DOI that OpenAlex knows, its card shows the
+    citation count, Field-Weighted Citation Impact (FWCI), Relative Citation Ratio (RCR, for
+    PubMed papers) and the h-index of an author, the journal and the publisher. Loaded
+    papers can be sorted by citations or FWCI. CORE has no usable citation data, so the
+    numbers come from [OpenAlex](https://openalex.org) and
+    [NIH iCite](https://icite.od.nih.gov), through the Worker. See `Design_Decisions.md` 5b.
 
 ## Project layout
 
@@ -177,9 +188,11 @@ src/app/
   search/       search page, search bar, paper card, search store, boolean parser and matcher,
                 query fixes, the plain-English box and the suggestions
   ai/           client for the app's own /ai/query endpoint
+  metrics/      citation metrics for the loaded papers, and sorting by them
   chart/        year chart, ranked top-ten chart, the switcher, and the pure functions behind them
-proxy.conf.mjs  dev-server proxy that adds the API key (and forwards /ai to the deployed Worker)
-worker/         the same proxy as a Cloudflare Worker, the plain-English endpoint, and their tests
+proxy.conf.mjs  dev-server proxy that adds the API key (and forwards /ai and /metrics to the deployed Worker)
+worker/         the same proxy as a Cloudflare Worker, the plain-English and citation
+                metrics endpoints, and their tests
 wrangler.jsonc  Cloudflare build output and routing settings
 e2e/            Playwright end-to-end tests and the mocked CORE they run against
 e2e-worker/     browser tests of the built app and the Worker together, and their fake CORE
@@ -196,6 +209,11 @@ e2e-worker/     browser tests of the built app and the Worker together, and thei
   unaffected. The model can write a poor query; the query is always shown so it can be
   corrected. Questions are sent to Cloudflare, which does not say in which country the model
   runs. Under `npm start` this one feature calls the deployed Worker.
+- Citation metrics cover only papers with a DOI that OpenAlex knows: 6 of 25 in one test
+  search and 14 of 25 in another. They are OpenAlex's and the NIH's figures and will differ
+  from Scopus's or Google Scholar's. Without an `OPENALEX_API_KEY` secret the deployed site
+  usually cannot fetch them, because OpenAlex's keyless allowance is shared by IP address;
+  it then says they are unavailable and everything else works.
 - The in-browser refine filter matches by substring and only sees the loaded papers; it is a
   convenience on top of CORE's search, not a replacement for it.
 - CORE pages by offset only up to 10,000 results; "Load more" stops there.
